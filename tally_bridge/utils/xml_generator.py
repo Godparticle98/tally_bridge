@@ -55,7 +55,7 @@ def _envelope(company):
     _sub(staticvariables, "SVCURRENTCOMPANY", company)
     requestdata = etree.SubElement(importdata, "REQUESTDATA")
     tallymessage = etree.SubElement(requestdata, "TALLYMESSAGE",
-                                    attrib={"xmlns:UDF": "TallyUDF"})
+                                    nsmap={"UDF": "TallyUDF"})
     return root, tallymessage
 
 
@@ -72,7 +72,7 @@ def _voucher_envelope(company, report_name="Vouchers"):
     _sub(staticvariables, "SVCURRENTCOMPANY", company)
     requestdata = etree.SubElement(importdata, "REQUESTDATA")
     tallymessage = etree.SubElement(requestdata, "TALLYMESSAGE",
-                                    attrib={"xmlns:UDF": "TallyUDF"})
+                                    nsmap={"UDF": "TallyUDF"})
     return root, tallymessage
 
 
@@ -536,7 +536,7 @@ def generate_full_export_xml(from_date=None, to_date=None, company=None):
     _sub(staticvariables, "SVCURRENTCOMPANY", company)
     requestdata = etree.SubElement(importdata, "REQUESTDATA")
     tallymessage = etree.SubElement(requestdata, "TALLYMESSAGE",
-                                    attrib={"xmlns:UDF": "TallyUDF"})
+                                    nsmap={"UDF": "TallyUDF"})
 
     total = 0
     generators = [
