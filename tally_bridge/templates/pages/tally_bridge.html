@@ -1,0 +1,299 @@
+{% extends "templates/web.html" %}
+{% block page_content %}
+<div class="tally-bridge-container">
+    <div class="tb-header">
+        <h2>Tally Bridge — Export Dashboard</h2>
+        <p>Export ERPNext data to Tally Prime 4.x. Use the sections below to run individual exports or a full sync.</p>
+    </div>
+
+    <!-- Connection Status -->
+    <div class="tb-card" id="connection-card">
+        <div class="tb-card-header">
+            <span class="tb-icon">⚡</span>
+            <h3>Tally Connection</h3>
+            <span id="conn-badge" class="tb-badge tb-badge-pending">Not tested</span>
+        </div>
+        <button class="tb-btn tb-btn-outline" onclick="testConnection()">Test Connection</button>
+        <a href="/app/tally-settings" class="tb-btn tb-btn-ghost">Configure Settings</a>
+        <div id="conn-result" class="tb-result" style="display:none"></div>
+    </div>
+
+    <!-- Date Range -->
+    <div class="tb-card">
+        <div class="tb-card-header">
+            <span class="tb-icon">📅</span>
+            <h3>Date Range</h3>
+        </div>
+        <div class="tb-row">
+            <div class="tb-field">
+                <label>From Date</label>
+                <input type="date" id="from_date" class="tb-input">
+            </div>
+            <div class="tb-field">
+                <label>To Date</label>
+                <input type="date" id="to_date" class="tb-input">
+            </div>
+            <div class="tb-field">
+                <label>Format</label>
+                <select id="export_format" class="tb-input">
+                    <option value="Tally XML">Tally XML</option>
+                    <option value="Excel">Excel</option>
+                    <option value="JSON">JSON</option>
+                </select>
+            </div>
+        </div>
+        <div class="tb-row" style="margin-top:8px">
+            <label class="tb-check">
+                <input type="checkbox" id="push_to_tally"> Push directly to Tally
+            </label>
+        </div>
+    </div>
+
+    <!-- Export Cards Grid -->
+    <div class="tb-grid">
+        <div class="tb-export-card" data-type="chart_of_accounts">
+            <div class="tb-export-icon">📊</div>
+            <h4>Chart of Accounts</h4>
+            <p>All GL accounts as Tally ledgers</p>
+            <button class="tb-btn tb-btn-primary" onclick="runExport('chart_of_accounts')">Export</button>
+            <div class="tb-export-status" id="status-chart_of_accounts"></div>
+        </div>
+
+        <div class="tb-export-card" data-type="parties">
+            <div class="tb-export-icon">👥</div>
+            <h4>Customers &amp; Suppliers</h4>
+            <p>Debtors and Creditors ledgers</p>
+            <button class="tb-btn tb-btn-primary" onclick="runExport('parties')">Export</button>
+            <div class="tb-export-status" id="status-parties"></div>
+        </div>
+
+        <div class="tb-export-card" data-type="sales_invoices">
+            <div class="tb-export-icon">🧾</div>
+            <h4>Sales Invoices</h4>
+            <p>Sales vouchers for Tally</p>
+            <button class="tb-btn tb-btn-primary" onclick="runExport('sales_invoices')">Export</button>
+            <div class="tb-export-status" id="status-sales_invoices"></div>
+        </div>
+
+        <div class="tb-export-card" data-type="purchase_invoices">
+            <div class="tb-export-icon">🛒</div>
+            <h4>Purchase Invoices</h4>
+            <p>Purchase vouchers for Tally</p>
+            <button class="tb-btn tb-btn-primary" onclick="runExport('purchase_invoices')">Export</button>
+            <div class="tb-export-status" id="status-purchase_invoices"></div>
+        </div>
+
+        <div class="tb-export-card" data-type="payment_entries">
+            <div class="tb-export-icon">💰</div>
+            <h4>Payment Entries</h4>
+            <p>Receipt &amp; payment vouchers</p>
+            <button class="tb-btn tb-btn-primary" onclick="runExport('payment_entries')">Export</button>
+            <div class="tb-export-status" id="status-payment_entries"></div>
+        </div>
+
+        <div class="tb-export-card" data-type="journal_entries">
+            <div class="tb-export-icon">📓</div>
+            <h4>Journal Entries</h4>
+            <p>Journal vouchers for Tally</p>
+            <button class="tb-btn tb-btn-primary" onclick="runExport('journal_entries')">Export</button>
+            <div class="tb-export-status" id="status-journal_entries"></div>
+        </div>
+
+        <div class="tb-export-card" data-type="bank_transactions">
+            <div class="tb-export-icon">🏦</div>
+            <h4>Bank Transactions</h4>
+            <p>Bank statement vouchers</p>
+            <button class="tb-btn tb-btn-primary" onclick="runExport('bank_transactions')">Export</button>
+            <div class="tb-export-status" id="status-bank_transactions"></div>
+        </div>
+
+        <div class="tb-export-card tb-export-card-full" data-type="all">
+            <div class="tb-export-icon">🚀</div>
+            <h4>Full Export</h4>
+            <p>Export all enabled doctypes in one shot</p>
+            <button class="tb-btn tb-btn-success" onclick="runExport('all')">Export All</button>
+            <div class="tb-export-status" id="status-all"></div>
+        </div>
+    </div>
+
+    <!-- Export Log -->
+    <div class="tb-card">
+        <div class="tb-card-header">
+            <span class="tb-icon">📋</span>
+            <h3>Recent Export Logs</h3>
+            <a href="/app/tally-export-log" class="tb-btn tb-btn-ghost">View All</a>
+        </div>
+        <div id="export-log-table">Loading...</div>
+    </div>
+</div>
+
+<style>
+.tally-bridge-container { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+.tb-header { margin-bottom: 24px; }
+.tb-header h2 { font-size: 22px; font-weight: 600; margin: 0 0 6px; }
+.tb-header p { color: #6b7280; margin: 0; }
+.tb-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+.tb-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.tb-card-header h3 { margin: 0; font-size: 16px; font-weight: 600; flex: 1; }
+.tb-icon { font-size: 18px; }
+.tb-badge { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 500; }
+.tb-badge-pending { background:#f3f4f6; color:#6b7280; }
+.tb-badge-success { background:#d1fae5; color:#065f46; }
+.tb-badge-error { background:#fee2e2; color:#991b1b; }
+.tb-btn { display:inline-flex; align-items:center; padding:7px 16px; border-radius:7px; font-size:13px; font-weight:500; cursor:pointer; border:none; text-decoration:none; transition:opacity .15s; margin-right:8px; }
+.tb-btn:hover { opacity:.85; }
+.tb-btn-primary { background:#2563eb; color:#fff; }
+.tb-btn-success { background:#059669; color:#fff; }
+.tb-btn-outline { background:#fff; color:#374151; border:1px solid #d1d5db; }
+.tb-btn-ghost { background:transparent; color:#6b7280; }
+.tb-row { display:flex; gap:16px; flex-wrap:wrap; }
+.tb-field { display:flex; flex-direction:column; gap:4px; min-width:160px; }
+.tb-field label { font-size:12px; color:#6b7280; font-weight:500; }
+.tb-input { padding:7px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px; outline:none; }
+.tb-check { display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer; }
+.tb-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:16px; margin-bottom:20px; }
+.tb-export-card { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:18px; display:flex; flex-direction:column; gap:6px; }
+.tb-export-card-full { grid-column: 1 / -1; flex-direction:row; align-items:center; background:#f0fdf4; border-color:#a7f3d0; }
+.tb-export-card-full h4, .tb-export-card-full p { flex:1; }
+.tb-export-icon { font-size:24px; }
+.tb-export-card h4 { margin:0; font-size:15px; font-weight:600; }
+.tb-export-card p { margin:0; font-size:12px; color:#6b7280; }
+.tb-export-status { font-size:12px; margin-top:4px; min-height:18px; }
+.tb-result { margin-top:12px; padding:10px 14px; background:#f9fafb; border-radius:6px; font-size:12px; font-family:monospace; white-space:pre-wrap; }
+.tb-log-table { width:100%; border-collapse:collapse; font-size:13px; }
+.tb-log-table th { background:#f3f4f6; padding:8px 12px; text-align:left; font-weight:600; border-bottom:1px solid #e5e7eb; }
+.tb-log-table td { padding:8px 12px; border-bottom:1px solid #f3f4f6; }
+.tb-log-table tr:last-child td { border-bottom:none; }
+.tb-status-success { color:#059669; font-weight:500; }
+.tb-status-failed { color:#dc2626; font-weight:500; }
+.tb-status-partial { color:#d97706; font-weight:500; }
+</style>
+
+<script>
+const API_BASE = "/api/method/tally_bridge.api.export";
+
+function getParams() {
+    return {
+        from_date: document.getElementById("from_date").value || null,
+        to_date: document.getElementById("to_date").value || null,
+        export_format: document.getElementById("export_format").value,
+        push_to_tally_flag: document.getElementById("push_to_tally").checked,
+    };
+}
+
+function setStatus(type, msg, cls="") {
+    const el = document.getElementById("status-" + type);
+    if (el) el.innerHTML = `<span class="${cls}">${msg}</span>`;
+}
+
+function testConnection() {
+    const badge = document.getElementById("conn-badge");
+    const result = document.getElementById("conn-result");
+    badge.className = "tb-badge tb-badge-pending";
+    badge.textContent = "Testing…";
+    result.style.display = "none";
+
+    frappe.call({
+        method: `${API_BASE}.test_tally_connection`,
+        callback(r) {
+            const d = r.message;
+            if (d && d.success) {
+                badge.className = "tb-badge tb-badge-success";
+                badge.textContent = "Connected";
+                result.style.display = "block";
+                result.textContent = d.response;
+            } else {
+                badge.className = "tb-badge tb-badge-error";
+                badge.textContent = "Failed";
+                result.style.display = "block";
+                result.textContent = (d && d.response) || "Connection failed";
+            }
+        }
+    });
+}
+
+const METHOD_MAP = {
+    chart_of_accounts: "export_chart_of_accounts",
+    parties: "export_parties",
+    sales_invoices: "export_sales_invoices",
+    purchase_invoices: "export_purchase_invoices",
+    payment_entries: "export_payment_entries",
+    journal_entries: "export_journal_entries",
+    bank_transactions: "export_bank_transactions",
+    all: "export_all",
+};
+
+function runExport(type) {
+    const p = getParams();
+    setStatus(type, "⏳ Exporting…");
+    frappe.call({
+        method: `${API_BASE}.${METHOD_MAP[type]}`,
+        args: p,
+        callback(r) {
+            const d = r.message;
+            if (d && d.success) {
+                const pushed = d.tally ? ` | Tally: ${d.tally.created} created` : "";
+                setStatus(type,
+                    `✅ ${d.records || 0} records exported${pushed} — <a href="/app/tally-export-log/${d.log}">${d.log}</a>`,
+                    "tb-status-success"
+                );
+                if (d.file_url) {
+                    window.open(d.file_url);
+                }
+                loadRecentLogs();
+            } else {
+                setStatus(type,
+                    `❌ ${(d && d.error) || "Export failed"}`,
+                    "tb-status-failed"
+                );
+            }
+        }
+    });
+}
+
+function loadRecentLogs() {
+    frappe.call({
+        method: "frappe.client.get_list",
+        args: {
+            doctype: "Tally Export Log",
+            fields: ["name", "export_type", "status", "records_exported",
+                     "export_format", "exported_at"],
+            limit: 10,
+            order_by: "exported_at desc",
+        },
+        callback(r) {
+            if (!r.message || !r.message.length) {
+                document.getElementById("export-log-table").innerHTML =
+                    "<p style='color:#9ca3af;font-size:13px'>No exports yet.</p>";
+                return;
+            }
+            let html = `<table class="tb-log-table">
+<tr><th>Log ID</th><th>Type</th><th>Format</th><th>Records</th><th>Status</th><th>Time</th></tr>`;
+            for (const log of r.message) {
+                const sc = {Success:"tb-status-success",Failed:"tb-status-failed",Partial:"tb-status-partial"}[log.status] || "";
+                html += `<tr>
+<td><a href="/app/tally-export-log/${log.name}">${log.name}</a></td>
+<td>${log.export_type}</td>
+<td>${log.export_format || "-"}</td>
+<td>${log.records_exported || 0}</td>
+<td class="${sc}">${log.status}</td>
+<td>${log.exported_at ? log.exported_at.split(".")[0] : "-"}</td>
+</tr>`;
+            }
+            html += "</table>";
+            document.getElementById("export-log-table").innerHTML = html;
+        }
+    });
+}
+
+// Set default dates (last 30 days)
+(function() {
+    const now = new Date();
+    const from = new Date(now);
+    from.setDate(from.getDate() - 30);
+    document.getElementById("to_date").value = now.toISOString().split("T")[0];
+    document.getElementById("from_date").value = from.toISOString().split("T")[0];
+    loadRecentLogs();
+})();
+</script>
+{% endblock %}

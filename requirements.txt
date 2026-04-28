@@ -1,0 +1,4 @@
+frappe
+requests
+openpyxl
+lxml

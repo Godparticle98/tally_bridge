@@ -1,0 +1,202 @@
+{
+  "doctype": "DocType",
+  "name": "Tally Settings",
+  "module": "Tally Bridge",
+  "issingle": 1,
+  "is_submittable": 0,
+  "track_changes": 1,
+  "fields": [
+    {
+      "fieldname": "connection_section",
+      "fieldtype": "Section Break",
+      "label": "Tally Connection"
+    },
+    {
+      "fieldname": "tally_host",
+      "fieldtype": "Data",
+      "label": "Tally Host",
+      "default": "localhost",
+      "reqd": 1,
+      "description": "Hostname or IP where Tally Prime is running"
+    },
+    {
+      "fieldname": "tally_port",
+      "fieldtype": "Int",
+      "label": "Tally XML Port",
+      "default": 9000,
+      "reqd": 1,
+      "description": "Default Tally XML Server port is 9000"
+    },
+    {
+      "fieldname": "company_name_in_tally",
+      "fieldtype": "Data",
+      "label": "Company Name in Tally",
+      "reqd": 1,
+      "description": "Must exactly match the company name in your Tally Prime data"
+    },
+    {
+      "fieldname": "cb1",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "auto_sync_enabled",
+      "fieldtype": "Check",
+      "label": "Enable Auto Sync",
+      "default": 0
+    },
+    {
+      "fieldname": "sync_interval",
+      "fieldtype": "Select",
+      "label": "Sync Interval",
+      "options": "Hourly\nEvery 6 Hours\nDaily",
+      "default": "Hourly",
+      "depends_on": "auto_sync_enabled"
+    },
+    {
+      "fieldname": "last_sync_at",
+      "fieldtype": "Datetime",
+      "label": "Last Sync At",
+      "read_only": 1
+    },
+    {
+      "fieldname": "export_section",
+      "fieldtype": "Section Break",
+      "label": "Export Settings"
+    },
+    {
+      "fieldname": "default_export_format",
+      "fieldtype": "Select",
+      "label": "Default Export Format",
+      "options": "Tally XML\nJSON\nExcel",
+      "default": "Tally XML"
+    },
+    {
+      "fieldname": "export_from_date",
+      "fieldtype": "Date",
+      "label": "Default Export From Date",
+      "description": "Leave blank to export all records"
+    },
+    {
+      "fieldname": "cb2",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "include_sales_invoice",
+      "fieldtype": "Check",
+      "label": "Include Sales Invoices",
+      "default": 1
+    },
+    {
+      "fieldname": "include_purchase_invoice",
+      "fieldtype": "Check",
+      "label": "Include Purchase Invoices",
+      "default": 1
+    },
+    {
+      "fieldname": "include_payment_entry",
+      "fieldtype": "Check",
+      "label": "Include Payment Entries",
+      "default": 1
+    },
+    {
+      "fieldname": "include_journal_entry",
+      "fieldtype": "Check",
+      "label": "Include Journal Entries",
+      "default": 1
+    },
+    {
+      "fieldname": "include_bank_transaction",
+      "fieldtype": "Check",
+      "label": "Include Bank Transactions",
+      "default": 1
+    },
+    {
+      "fieldname": "include_chart_of_accounts",
+      "fieldtype": "Check",
+      "label": "Include Chart of Accounts",
+      "default": 1
+    },
+    {
+      "fieldname": "include_parties",
+      "fieldtype": "Check",
+      "label": "Include Customers & Suppliers",
+      "default": 1
+    },
+    {
+      "fieldname": "tally_section",
+      "fieldtype": "Section Break",
+      "label": "Tally Mapping"
+    },
+    {
+      "fieldname": "sales_voucher_type",
+      "fieldtype": "Data",
+      "label": "Sales Voucher Type in Tally",
+      "default": "Sales",
+      "description": "Name of the Sales voucher type in Tally"
+    },
+    {
+      "fieldname": "purchase_voucher_type",
+      "fieldtype": "Data",
+      "label": "Purchase Voucher Type in Tally",
+      "default": "Purchase"
+    },
+    {
+      "fieldname": "receipt_voucher_type",
+      "fieldtype": "Data",
+      "label": "Receipt Voucher Type in Tally",
+      "default": "Receipt"
+    },
+    {
+      "fieldname": "payment_voucher_type",
+      "fieldtype": "Data",
+      "label": "Payment Voucher Type in Tally",
+      "default": "Payment"
+    },
+    {
+      "fieldname": "journal_voucher_type",
+      "fieldtype": "Data",
+      "label": "Journal Voucher Type in Tally",
+      "default": "Journal"
+    },
+    {
+      "fieldname": "cb3",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "sundry_debtors_ledger",
+      "fieldtype": "Data",
+      "label": "Sundry Debtors Ledger",
+      "default": "Sundry Debtors"
+    },
+    {
+      "fieldname": "sundry_creditors_ledger",
+      "fieldtype": "Data",
+      "label": "Sundry Creditors Ledger",
+      "default": "Sundry Creditors"
+    },
+    {
+      "fieldname": "gst_output_ledger",
+      "fieldtype": "Data",
+      "label": "GST Output Tax Ledger",
+      "default": "Output GST"
+    },
+    {
+      "fieldname": "gst_input_ledger",
+      "fieldtype": "Data",
+      "label": "GST Input Tax Ledger",
+      "default": "Input GST"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1
+    },
+    {
+      "role": "Accounts Manager",
+      "read": 1,
+      "write": 1
+    }
+  ]
+}
