@@ -1,7 +1,7 @@
-// tally_bridge/public/js/purchase_invoice_tally.js
-// Adds "Export to Tally" and "Download XML" buttons on submitted Purchase Invoices
+// tally_bridge/public/js/journal_entry_tally.js
+// Adds "Export to Tally" and "Download XML" buttons on submitted Journal Entries
 
-frappe.ui.form.on("Purchase Invoice", {
+frappe.ui.form.on("Journal Entry", {
 	refresh(frm) {
 		if (frm.doc.docstatus === 1) {
 			frm.add_custom_button(__("Export to Tally"), function () {
@@ -11,12 +11,12 @@ frappe.ui.form.on("Purchase Invoice", {
 						frappe.call({
 							method: "tally_bridge.api.export.export_single_document",
 							args: {
-								doctype: "Purchase Invoice",
+								doctype: "Journal Entry",
 								docname: frm.doc.name,
 								push_to_tally_flag: true,
 							},
 							freeze: true,
-							freeze_message: __("Pushing to Tally\u2026"),
+							freeze_message: __("Pushing to Tally…"),
 							callback(r) {
 								const d = r.message;
 								if (d && d.success) {
@@ -43,7 +43,7 @@ frappe.ui.form.on("Purchase Invoice", {
 				frappe.call({
 					method: "tally_bridge.api.export.export_single_document",
 					args: {
-						doctype: "Purchase Invoice",
+						doctype: "Journal Entry",
 						docname: frm.doc.name,
 						push_to_tally_flag: false,
 					},

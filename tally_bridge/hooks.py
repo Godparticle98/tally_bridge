@@ -27,14 +27,13 @@ scheduler_events = {
 # DocType JS overrides
 # ──────────────────────────────────────────────
 doctype_js = {
-    "Sales Invoice": "public/js/sales_invoice_tally.js",
+    "Sales Invoice":    "public/js/sales_invoice_tally.js",
     "Purchase Invoice": "public/js/purchase_invoice_tally.js",
-    "Payment Entry": "public/js/payment_entry_tally.js",
-    "Journal Entry": "public/js/journal_entry_tally.js",
+    "Payment Entry":    "public/js/payment_entry_tally.js",
+    "Journal Entry":    "public/js/journal_entry_tally.js",
 }
 
-# ──────────────────────────────────────────────
-# App includes
-# ──────────────────────────────────────────────
-app_include_js = ["assets/tally_bridge/js/tally_bridge.js"]
-app_include_css = ["assets/tally_bridge/css/tally_bridge.css"]
+# NOTE: app_include_js / app_include_css are intentionally omitted.
+# Those keys require a compiled bundle under assets/tally_bridge/
+# which needs an esbuild entry point. Since this app has no custom
+# bundle, removing them prevents the ERR_INVALID_ARG_TYPE build error.
