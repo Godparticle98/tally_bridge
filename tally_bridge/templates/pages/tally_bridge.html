@@ -170,7 +170,7 @@
 </style>
 
 <script>
-const API_BASE = "/api/method/tally_bridge.api.export";
+const API_BASE = "tally_bridge.api.export";
 
 function getParams() {
     return {
@@ -239,6 +239,14 @@ function runExport(type) {
                 );
                 if (d.file_url) {
                     window.open(d.file_url);
+                } else if (!p.push_to_tally_flag && d.xml) {
+                    const blob = new Blob([d.xml], { type: "application/xml" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `tally_export_${type}.xml`;
+                    a.click();
+                    URL.revokeObjectURL(url);
                 }
                 loadRecentLogs();
             } else {

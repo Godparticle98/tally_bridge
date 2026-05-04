@@ -43,7 +43,9 @@ class TallyConnector:
         except requests.exceptions.ConnectionError:
             return False, (
                 f"Cannot connect to Tally at {self.base_url}. "
-                "Make sure Tally Prime is open and XML Server is enabled."
+                "Make sure Tally Prime is open and XML Server is enabled. "
+                "If ERPNext is in the cloud and Tally is on your local LAN, direct connection won't work. "
+                "In that case, please uncheck 'Push directly to Tally' and use the 'Download XML' option instead."
             )
         except requests.exceptions.Timeout:
             return False, f"Tally connection timed out after {self.timeout}s."

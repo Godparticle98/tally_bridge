@@ -20,10 +20,12 @@ def _settings():
 
 
 def _tally_date(dt):
-    """Convert ERPNext date to Tally's YYYYMMDD format."""
-    if not dt:
-        return ""
+    """Convert ERPNext date to Tally's YYYYMMDD format.
+    Falls back to today if dt is None/empty to avoid 'voucher date missing' error.
+    """
     import datetime
+    if not dt:
+        dt = frappe.utils.today()
     if isinstance(dt, str):
         dt = frappe.utils.getdate(dt)
     return dt.strftime("%Y%m%d")
@@ -200,12 +202,14 @@ def generate_sales_invoice_xml(from_date=None, to_date=None, company=None):
     count = 0
     for inv in invoices:
         doc = frappe.get_doc("Sales Invoice", inv.name)
+        tally_dt = _tally_date(inv.posting_date)
         voucher = etree.SubElement(
             tallymessage, "VOUCHER",
             attrib={"REMOTEID": inv.name, "VCHTYPE": settings.sales_voucher_type or "Sales",
                     "ACTION": "Create"}
         )
-        _sub(voucher, "DATE", _tally_date(inv.posting_date))
+        _sub(voucher, "DATE", tally_dt)
+        _sub(voucher, "EFFECTIVEDATE", tally_dt)
         _sub(voucher, "VOUCHERTYPENAME", settings.sales_voucher_type or "Sales")
         _sub(voucher, "VOUCHERNUMBER", inv.name)
         _sub(voucher, "PARTYLEDGERNAME", inv.customer_name)
@@ -285,13 +289,15 @@ def generate_purchase_invoice_xml(from_date=None, to_date=None, company=None):
     count = 0
     for inv in invoices:
         doc = frappe.get_doc("Purchase Invoice", inv.name)
+        tally_dt = _tally_date(inv.posting_date)
         voucher = etree.SubElement(
             tallymessage, "VOUCHER",
             attrib={"REMOTEID": inv.name,
                     "VCHTYPE": settings.purchase_voucher_type or "Purchase",
                     "ACTION": "Create"}
         )
-        _sub(voucher, "DATE", _tally_date(inv.posting_date))
+        _sub(voucher, "DATE", tally_dt)
+        _sub(voucher, "EFFECTIVEDATE", tally_dt)
         _sub(voucher, "VOUCHERTYPENAME", settings.purchase_voucher_type or "Purchase")
         _sub(voucher, "VOUCHERNUMBER", inv.bill_no or inv.name)
         _sub(voucher, "PARTYLEDGERNAME", inv.supplier_name)
@@ -376,38 +382,38 @@ def generate_payment_entry_xml(from_date=None, to_date=None, company=None):
         else:
             vch_type = settings.journal_voucher_type or "Journal"
 
+        tally_dt = _tally_date(pay.posting_date)
         voucher = etree.SubElement(
             tallymessage, "VOUCHER",
             attrib={"REMOTEID": pay.name, "VCHTYPE": vch_type, "ACTION": "Create"}
         )
-        _sub(voucher, "DATE", _tally_date(pay.posting_date))
+        _sub(voucher, "DATE", tally_dt)
+        _sub(voucher, "EFFECTIVEDATE", tally_dt)
         _sub(voucher, "VOUCHERTYPENAME", vch_type)
         _sub(voucher, "VOUCHERNUMBER", pay.name)
         _sub(voucher, "PARTYLEDGERNAME", pay.party_name)
         _sub(voucher, "NARRATION", cstr(pay.remarks or f"Payment {pay.name}"))
 
-        allledgerentries = etree.SubElement(voucher, "ALLLEDGERENTRIES.LIST")
-
         if pay.payment_type == "Receive":
             # Debit: Bank/Cash account
-            bank_entry = etree.SubElement(allledgerentries, "ALLLEDGERENTRIES.LIST")
+            bank_entry = etree.SubElement(voucher, "ALLLEDGERENTRIES.LIST")
             _sub(bank_entry, "LEDGERNAME", _strip_company(pay.paid_to))
             _sub(bank_entry, "ISDEEMEDPOSITIVE", "Yes")
             _sub(bank_entry, "AMOUNT", f"-{_amount(pay.received_amount)}")
             # Credit: Party
-            party_entry = etree.SubElement(allledgerentries, "ALLLEDGERENTRIES.LIST")
+            party_entry = etree.SubElement(voucher, "ALLLEDGERENTRIES.LIST")
             _sub(party_entry, "LEDGERNAME", pay.party_name)
             _sub(party_entry, "ISDEEMEDPOSITIVE", "No")
             _sub(party_entry, "AMOUNT", _amount(pay.paid_amount))
 
         elif pay.payment_type == "Pay":
             # Debit: Party
-            party_entry = etree.SubElement(allledgerentries, "ALLLEDGERENTRIES.LIST")
+            party_entry = etree.SubElement(voucher, "ALLLEDGERENTRIES.LIST")
             _sub(party_entry, "LEDGERNAME", pay.party_name)
             _sub(party_entry, "ISDEEMEDPOSITIVE", "Yes")
             _sub(party_entry, "AMOUNT", f"-{_amount(pay.paid_amount)}")
             # Credit: Bank/Cash
-            bank_entry = etree.SubElement(allledgerentries, "ALLLEDGERENTRIES.LIST")
+            bank_entry = etree.SubElement(voucher, "ALLLEDGERENTRIES.LIST")
             _sub(bank_entry, "LEDGERNAME", _strip_company(pay.paid_from))
             _sub(bank_entry, "ISDEEMEDPOSITIVE", "No")
             _sub(bank_entry, "AMOUNT", _amount(pay.received_amount))
@@ -449,21 +455,21 @@ def generate_journal_entry_xml(from_date=None, to_date=None, company=None):
     count = 0
     for jv in journals:
         doc = frappe.get_doc("Journal Entry", jv.name)
+        tally_dt = _tally_date(jv.posting_date)
         voucher = etree.SubElement(
             tallymessage, "VOUCHER",
             attrib={"REMOTEID": jv.name,
                     "VCHTYPE": settings.journal_voucher_type or "Journal",
                     "ACTION": "Create"}
         )
-        _sub(voucher, "DATE", _tally_date(jv.posting_date))
+        _sub(voucher, "DATE", tally_dt)
+        _sub(voucher, "EFFECTIVEDATE", tally_dt)
         _sub(voucher, "VOUCHERTYPENAME", settings.journal_voucher_type or "Journal")
         _sub(voucher, "VOUCHERNUMBER", jv.name)
         _sub(voucher, "NARRATION", cstr(jv.user_remark or f"Journal Entry {jv.name}"))
 
-        allledgerentries = etree.SubElement(voucher, "ALLLEDGERENTRIES.LIST")
-
         for acc in doc.accounts:
-            entry = etree.SubElement(allledgerentries, "ALLLEDGERENTRIES.LIST")
+            entry = etree.SubElement(voucher, "ALLLEDGERENTRIES.LIST")
             ledger_name = _strip_company(acc.account)
             _sub(entry, "LEDGERNAME", ledger_name)
             if flt(acc.debit_in_account_currency) > 0:
@@ -511,36 +517,36 @@ def generate_bank_transaction_xml(from_date=None, to_date=None, company=None):
         )
         bank_ledger = _strip_company(bank_account_doc) if bank_account_doc else txn.bank_account
 
+        tally_dt = _tally_date(txn.date)
         voucher = etree.SubElement(
             tallymessage, "VOUCHER",
             attrib={"REMOTEID": txn.name,
                     "VCHTYPE": settings.journal_voucher_type or "Journal",
                     "ACTION": "Create"}
         )
-        _sub(voucher, "DATE", _tally_date(txn.date))
+        _sub(voucher, "DATE", tally_dt)
+        _sub(voucher, "EFFECTIVEDATE", tally_dt)
         _sub(voucher, "VOUCHERTYPENAME", settings.journal_voucher_type or "Journal")
         _sub(voucher, "VOUCHERNUMBER", txn.reference_number or txn.name)
         _sub(voucher, "NARRATION", cstr(txn.description or f"Bank Transaction {txn.name}"))
 
-        allledgerentries = etree.SubElement(voucher, "ALLLEDGERENTRIES.LIST")
-
         if is_deposit:
-            bank_e = etree.SubElement(allledgerentries, "ALLLEDGERENTRIES.LIST")
+            bank_e = etree.SubElement(voucher, "ALLLEDGERENTRIES.LIST")
             _sub(bank_e, "LEDGERNAME", bank_ledger)
             _sub(bank_e, "ISDEEMEDPOSITIVE", "Yes")
             _sub(bank_e, "AMOUNT", f"-{_amount(amount)}")
 
-            suspense_e = etree.SubElement(allledgerentries, "ALLLEDGERENTRIES.LIST")
-            _sub(suspense_e, "LEDGERNAME", "Bank Charges")
+            suspense_e = etree.SubElement(voucher, "ALLLEDGERENTRIES.LIST")
+            _sub(suspense_e, "LEDGERNAME", "Suspense Account")
             _sub(suspense_e, "ISDEEMEDPOSITIVE", "No")
             _sub(suspense_e, "AMOUNT", _amount(amount))
         else:
-            suspense_e = etree.SubElement(allledgerentries, "ALLLEDGERENTRIES.LIST")
-            _sub(suspense_e, "LEDGERNAME", "Bank Charges")
+            suspense_e = etree.SubElement(voucher, "ALLLEDGERENTRIES.LIST")
+            _sub(suspense_e, "LEDGERNAME", "Suspense Account")
             _sub(suspense_e, "ISDEEMEDPOSITIVE", "Yes")
             _sub(suspense_e, "AMOUNT", f"-{_amount(amount)}")
 
-            bank_e = etree.SubElement(allledgerentries, "ALLLEDGERENTRIES.LIST")
+            bank_e = etree.SubElement(voucher, "ALLLEDGERENTRIES.LIST")
             _sub(bank_e, "LEDGERNAME", bank_ledger)
             _sub(bank_e, "ISDEEMEDPOSITIVE", "No")
             _sub(bank_e, "AMOUNT", _amount(amount))
