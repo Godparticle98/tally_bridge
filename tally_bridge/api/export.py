@@ -13,6 +13,8 @@ from frappe.utils import now_datetime, today
 from tally_bridge.utils.xml_generator import (
     generate_chart_of_accounts_xml,
     generate_parties_xml,
+    generate_uoms_xml,
+    generate_stock_items_xml,
     generate_sales_invoice_xml,
     generate_purchase_invoice_xml,
     generate_payment_entry_xml,
@@ -107,6 +109,44 @@ def export_parties(push_to_tally_flag=False, company=None):
         return {"success": True, "records": count, "log": log_name, "xml": xml_str}
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "Tally Bridge: Parties export")
+        return {"success": False, "error": str(e), "log": log_name}
+
+
+@frappe.whitelist()
+def export_uoms(push_to_tally_flag=False, company=None):
+    company = company or frappe.defaults.get_user_default("Company")
+    log_name = _create_log("UOMs", "Tally XML")
+    try:
+        xml_str, count = generate_uoms_xml(company=company)
+        _finalize_log(log_name, count, 0, xml_str)
+
+        if frappe.parse_json(push_to_tally_flag):
+            result = push_to_tally(xml_str, log_name)
+            return {"success": True, "records": count, "log": log_name,
+                    "tally": result, "xml": xml_str}
+
+        return {"success": True, "records": count, "log": log_name, "xml": xml_str}
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "Tally Bridge: UOMs export")
+        return {"success": False, "error": str(e), "log": log_name}
+
+
+@frappe.whitelist()
+def export_stock_items(push_to_tally_flag=False, company=None):
+    company = company or frappe.defaults.get_user_default("Company")
+    log_name = _create_log("Stock Items", "Tally XML")
+    try:
+        xml_str, count = generate_stock_items_xml(company=company)
+        _finalize_log(log_name, count, 0, xml_str)
+
+        if frappe.parse_json(push_to_tally_flag):
+            result = push_to_tally(xml_str, log_name)
+            return {"success": True, "records": count, "log": log_name,
+                    "tally": result, "xml": xml_str}
+
+        return {"success": True, "records": count, "log": log_name, "xml": xml_str}
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "Tally Bridge: Stock Items export")
         return {"success": False, "error": str(e), "log": log_name}
 
 
