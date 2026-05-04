@@ -12,7 +12,7 @@
       "fieldname": "export_type",
       "fieldtype": "Select",
       "label": "Export Type",
-      "options": "Sales Invoice\nPurchase Invoice\nPayment Entry\nJournal Entry\nBank Transaction\nChart of Accounts\nParties\nFull Export",
+      "options": "Sales Invoice\nPurchase Invoice\nPayment Entry\nJournal Entry\nBank Transaction\nChart of Accounts\nParties\nUOMs\nStock Items\nFull Export",
       "reqd": 1,
       "in_list_view": 1
     },
