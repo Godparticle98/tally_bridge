@@ -1,0 +1,9 @@
+test/
+check.py
+__pycache__/
+check_db_apps.py
+check_workspace.py
+check_db.py
+check_doctype.py
+check_modules.py
+force_sync.py

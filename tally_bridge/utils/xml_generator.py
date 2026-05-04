@@ -210,31 +210,49 @@ def generate_sales_invoice_xml(from_date=None, to_date=None, company=None):
         _sub(voucher, "VOUCHERNUMBER", inv.name)
         _sub(voucher, "PARTYLEDGERNAME", inv.customer_name)
         _sub(voucher, "NARRATION", cstr(inv.remarks or f"Sales Invoice {inv.name}"))
+        _sub(voucher, "ISINVOICE", "Yes")
+
+        # Inventory entries (Items)
+        for item in doc.items:
+            inventory_entry = etree.SubElement(voucher, "ALLINVENTORYENTRIES.LIST")
+            _sub(inventory_entry, "STOCKITEMNAME", item.item_name or item.item_code)
+            _sub(inventory_entry, "ISDEEMEDPOSITIVE", "No") # Outward is No
+            
+            _sub(inventory_entry, "RATE", f"{_amount(item.rate)}/{item.uom}")
+            _sub(inventory_entry, "AMOUNT", _amount(item.base_amount))
+            _sub(inventory_entry, "ACTUALQTY", f" {item.qty} {item.uom}")
+            _sub(inventory_entry, "BILLEDQTY", f" {item.qty} {item.uom}")
+            
+            # Accounting Allocation for the Sales Ledger
+            accounting_alloc = etree.SubElement(inventory_entry, "ACCOUNTINGALLOCATIONS.LIST")
+            ledger_name = _strip_company(item.income_account) if item.income_account else "Sales"
+            _sub(accounting_alloc, "LEDGERNAME", ledger_name)
+            _sub(accounting_alloc, "ISDEEMEDPOSITIVE", "No")
+            _sub(accounting_alloc, "AMOUNT", _amount(item.base_amount))
 
         # Ledger entries section
-        allledgerentries = etree.SubElement(voucher, "ALLLEDGERENTRIES.LIST")
-
         # Party entry (Debit)
-        party_entry = etree.SubElement(allledgerentries, "ALLLEDGERENTRIES.LIST")
+        party_entry = etree.SubElement(voucher, "LEDGERENTRIES.LIST")
         _sub(party_entry, "LEDGERNAME", inv.customer_name)
         _sub(party_entry, "ISDEEMEDPOSITIVE", "Yes")
         _sub(party_entry, "AMOUNT", f"-{_amount(inv.base_grand_total)}")
 
-        # Sales ledger entry (Credit)
-        sales_entry = etree.SubElement(allledgerentries, "ALLLEDGERENTRIES.LIST")
-        _sub(sales_entry, "LEDGERNAME", "Sales")
-        _sub(sales_entry, "ISDEEMEDPOSITIVE", "No")
-        _sub(sales_entry, "AMOUNT", _amount(inv.net_total))
-
-        # Tax entries
+        # Tax and Charge entries
         for tax in doc.taxes:
             if flt(tax.tax_amount) != 0:
-                tax_entry = etree.SubElement(allledgerentries, "ALLLEDGERENTRIES.LIST")
-                _sub(tax_entry, "LEDGERNAME",
-                     tax.account_head.split(" - ")[0] if " - " in tax.account_head
-                     else tax.account_head)
-                _sub(tax_entry, "ISDEEMEDPOSITIVE", "No")
-                _sub(tax_entry, "AMOUNT", _amount(tax.tax_amount))
+                tax_entry = etree.SubElement(voucher, "LEDGERENTRIES.LIST")
+                _sub(tax_entry, "LEDGERNAME", _strip_company(tax.account_head))
+                
+                # In ERPNext: base_tax_amount_after_discount_amount holds the actual tax value added/deducted.
+                # If negative, it's a deduction (Debit -> ISDEEMEDPOSITIVE=Yes, Amount=-ve)
+                # If positive, it's an addition (Credit -> ISDEEMEDPOSITIVE=No, Amount=+ve)
+                tax_val = flt(tax.base_tax_amount_after_discount_amount)
+                if not tax_val:
+                    tax_val = flt(tax.base_tax_amount)
+                
+                is_debit = tax_val < 0
+                _sub(tax_entry, "ISDEEMEDPOSITIVE", "Yes" if is_debit else "No")
+                _sub(tax_entry, "AMOUNT", f"-{_amount(abs(tax_val))}" if is_debit else _amount(tax_val))
 
         count += 1
 
@@ -278,30 +296,46 @@ def generate_purchase_invoice_xml(from_date=None, to_date=None, company=None):
         _sub(voucher, "VOUCHERNUMBER", inv.bill_no or inv.name)
         _sub(voucher, "PARTYLEDGERNAME", inv.supplier_name)
         _sub(voucher, "NARRATION", cstr(inv.remarks or f"Purchase Invoice {inv.name}"))
+        _sub(voucher, "ISINVOICE", "Yes")
 
-        allledgerentries = etree.SubElement(voucher, "ALLLEDGERENTRIES.LIST")
+        # Inventory entries (Items)
+        for item in doc.items:
+            inventory_entry = etree.SubElement(voucher, "ALLINVENTORYENTRIES.LIST")
+            _sub(inventory_entry, "STOCKITEMNAME", item.item_name or item.item_code)
+            _sub(inventory_entry, "ISDEEMEDPOSITIVE", "Yes") # Inward is Yes
+            
+            _sub(inventory_entry, "RATE", f"{_amount(item.rate)}/{item.uom}")
+            _sub(inventory_entry, "AMOUNT", f"-{_amount(item.base_amount)}") # Debit -> negative
+            _sub(inventory_entry, "ACTUALQTY", f" {item.qty} {item.uom}")
+            _sub(inventory_entry, "BILLEDQTY", f" {item.qty} {item.uom}")
+            
+            # Accounting Allocation for the Purchase Ledger
+            accounting_alloc = etree.SubElement(inventory_entry, "ACCOUNTINGALLOCATIONS.LIST")
+            ledger_name = _strip_company(item.expense_account) if item.expense_account else "Purchase"
+            _sub(accounting_alloc, "LEDGERNAME", ledger_name)
+            _sub(accounting_alloc, "ISDEEMEDPOSITIVE", "Yes")
+            _sub(accounting_alloc, "AMOUNT", f"-{_amount(item.base_amount)}")
 
-        # Purchase ledger (Debit)
-        purchase_entry = etree.SubElement(allledgerentries, "ALLLEDGERENTRIES.LIST")
-        _sub(purchase_entry, "LEDGERNAME", "Purchase")
-        _sub(purchase_entry, "ISDEEMEDPOSITIVE", "Yes")
-        _sub(purchase_entry, "AMOUNT", f"-{_amount(inv.net_total)}")
+        # Party (Credit)
+        party_entry = etree.SubElement(voucher, "LEDGERENTRIES.LIST")
+        _sub(party_entry, "LEDGERNAME", inv.supplier_name)
+        _sub(party_entry, "ISDEEMEDPOSITIVE", "No")
+        _sub(party_entry, "AMOUNT", _amount(inv.base_grand_total))
 
         # Tax entries (Debit for input tax)
         for tax in doc.taxes:
             if flt(tax.tax_amount) != 0:
-                tax_entry = etree.SubElement(allledgerentries, "ALLLEDGERENTRIES.LIST")
-                _sub(tax_entry, "LEDGERNAME",
-                     tax.account_head.split(" - ")[0] if " - " in tax.account_head
-                     else tax.account_head)
-                _sub(tax_entry, "ISDEEMEDPOSITIVE", "Yes")
-                _sub(tax_entry, "AMOUNT", f"-{_amount(tax.tax_amount)}")
-
-        # Party (Credit)
-        party_entry = etree.SubElement(allledgerentries, "ALLLEDGERENTRIES.LIST")
-        _sub(party_entry, "LEDGERNAME", inv.supplier_name)
-        _sub(party_entry, "ISDEEMEDPOSITIVE", "No")
-        _sub(party_entry, "AMOUNT", _amount(inv.base_grand_total))
+                tax_entry = etree.SubElement(voucher, "LEDGERENTRIES.LIST")
+                _sub(tax_entry, "LEDGERNAME", _strip_company(tax.account_head))
+                
+                # In Purchase, tax is typically a Debit (addition to cost/input credit) -> ISDEEMEDPOSITIVE=Yes
+                tax_val = flt(tax.base_tax_amount_after_discount_amount)
+                if not tax_val:
+                    tax_val = flt(tax.base_tax_amount)
+                
+                is_credit = tax_val < 0 # deduction from purchase total is a Credit
+                _sub(tax_entry, "ISDEEMEDPOSITIVE", "No" if is_credit else "Yes")
+                _sub(tax_entry, "AMOUNT", _amount(abs(tax_val)) if is_credit else f"-{_amount(tax_val)}")
 
         count += 1
 
@@ -517,6 +551,61 @@ def generate_bank_transaction_xml(from_date=None, to_date=None, company=None):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Units of Measure (UOM)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def generate_uoms_xml(company=None):
+    """Export Units of Measure to Tally."""
+    settings = _settings()
+    company = company or frappe.defaults.get_user_default("Company")
+    root, tallymessage = _envelope(company)
+
+    uoms = frappe.get_all("UOM", fields=["name", "uom_name"])
+    count = 0
+    for u in uoms:
+        unit = etree.SubElement(
+            tallymessage, "UNIT",
+            attrib={"NAME": u.name, "ACTION": "Create"}
+        )
+        _sub(unit, "NAME", u.name)
+        _sub(unit, "ISSIMPLEUNIT", "Yes")
+        count += 1
+
+    return _to_xml_string(root), count
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stock Items
+# ─────────────────────────────────────────────────────────────────────────────
+
+def generate_stock_items_xml(company=None):
+    """Export Stock Items to Tally."""
+    settings = _settings()
+    company = company or frappe.defaults.get_user_default("Company")
+    root, tallymessage = _envelope(company)
+
+    items = frappe.get_all(
+        "Item",
+        fields=["name", "item_name", "item_group", "stock_uom", "description", "standard_rate"]
+    )
+    count = 0
+    for item in items:
+        # Generate item group if needed, but Tally allows basic import without predefined group if we use Primary
+        # For safety, map to Primary if the item_group doesn't exist in Tally, or let Tally handle it
+        stockitem = etree.SubElement(
+            tallymessage, "STOCKITEM",
+            attrib={"NAME": item.item_name or item.name, "ACTION": "Create"}
+        )
+        _sub(stockitem, "NAME", item.item_name or item.name)
+        _sub(stockitem, "PARENT", item.item_group or "Primary")
+        _sub(stockitem, "BASEUNITS", item.stock_uom or "Nos")
+        _sub(stockitem, "DESCRIPTION", cstr(item.description))
+        count += 1
+
+    return _to_xml_string(root), count
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Master export function
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -540,6 +629,8 @@ def generate_full_export_xml(from_date=None, to_date=None, company=None):
 
     total = 0
     generators = [
+        (settings.get("include_uoms", 1), generate_uoms_xml, {}),
+        (settings.get("include_stock_items", 1), generate_stock_items_xml, {}),
         (settings.include_chart_of_accounts, generate_chart_of_accounts_xml, {}),
         (settings.include_parties, generate_parties_xml, {}),
         (settings.include_sales_invoice, generate_sales_invoice_xml,

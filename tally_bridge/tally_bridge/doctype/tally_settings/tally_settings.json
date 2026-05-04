@@ -123,6 +123,18 @@
       "default": 1
     },
     {
+      "fieldname": "include_stock_items",
+      "fieldtype": "Check",
+      "label": "Include Stock Items",
+      "default": 1
+    },
+    {
+      "fieldname": "include_uoms",
+      "fieldtype": "Check",
+      "label": "Include Units of Measure",
+      "default": 1
+    },
+    {
       "fieldname": "tally_section",
       "fieldtype": "Section Break",
       "label": "Tally Mapping"
