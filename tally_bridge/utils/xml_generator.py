@@ -418,7 +418,7 @@ def _add_party_ledger(tallymessage, party_name, parent_group, addr, tax_id):
     _sub(lang_list, "LANGUAGEID", "1033")
 
     deduct_rules = etree.SubElement(ledger, "DEDUCTINSAMEVCHRULES.LIST")
-    _sub(deduct_rules, "NATUREOFPAYMENT", "&#4; All Items")
+    _sub(deduct_rules, "NATUREOFPAYMENT", "")
     
     contact_details = etree.SubElement(ledger, "CONTACTDETAILS.LIST")
     _sub(contact_details, "NAME", "Primary Mobile No.")
