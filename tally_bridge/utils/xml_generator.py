@@ -129,8 +129,77 @@ def generate_chart_of_accounts_xml(company=None):
 # Customers & Suppliers → Tally Ledgers (Debtors / Creditors)
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _get_party_address(party_type, party_name):
+    """
+    Fetch the primary address for a Customer or Supplier.
+    Returns a dict with address fields (all may be empty strings if not found).
+    """
+    empty = {
+        "address_line1": "", "address_line2": "", "city": "",
+        "state": "", "country": "", "pincode": "", "gstin": "",
+        "gst_category": ""
+    }
+    try:
+        # Find the linked address via Dynamic Link
+        addr_name = frappe.db.get_value(
+            "Dynamic Link",
+            {"link_doctype": party_type, "link_name": party_name,
+             "parenttype": "Address"},
+            "parent"
+        )
+        if not addr_name:
+            return empty
+        addr = frappe.get_cached_doc("Address", addr_name)
+        return {
+            "address_line1": cstr(addr.get("address_line1") or ""),
+            "address_line2": cstr(addr.get("address_line2") or ""),
+            "city":          cstr(addr.get("city") or ""),
+            "state":         cstr(addr.get("state") or ""),
+            "country":       cstr(addr.get("country") or ""),
+            "pincode":       cstr(addr.get("pincode") or ""),
+            "gstin":         cstr(addr.get("gstin") or ""),
+            "gst_category":  cstr(addr.get("gst_category") or ""),
+        }
+    except Exception:
+        return empty
+
+
+def _build_party_mailing_address(addr):
+    """
+    Combine address lines into a single mailing address string for Tally.
+    Tally uses the ADDRESS tag (can be multi-line, but we join with comma).
+    """
+    parts = []
+    for f in ["address_line1", "address_line2", "city"]:
+        val = addr.get(f, "").strip()
+        if val:
+            parts.append(val)
+    if addr.get("pincode"):
+        parts.append(addr["pincode"].strip())
+    return ", ".join(parts)
+
+
+def _gst_reg_type(gst_category):
+    """
+    Map ERPNext GST Category to Tally GSTREGISTRATIONTYPE.
+    """
+    mapping = {
+        "Registered Regular": "Regular",
+        "Registered Composition": "Composition",
+        "SEZ": "SEZ",
+        "Overseas": "Overseas",
+        "Consumer": "Consumer",
+        "Deemed Export": "Deemed Exports - Refund",
+        "UIN Holders": "UIN Holders",
+        "Tax Deductor": "Tax Deductor",
+    }
+    return mapping.get(gst_category, "Regular") if gst_category else "Regular"
+
+
 def generate_parties_xml(company=None):
-    """Export Customers and Suppliers as Tally ledgers under Sundry Debtors/Creditors."""
+    """Export Customers and Suppliers as Tally ledgers under Sundry Debtors/Creditors.
+    Includes mailing address, state, country, pincode, GSTIN and GST registration type.
+    """
     settings = _settings()
     company = company or frappe.defaults.get_user_default("Company")
     root, tallymessage = _envelope(company)
@@ -141,6 +210,9 @@ def generate_parties_xml(company=None):
         fields=["name", "customer_name", "customer_group", "tax_id"]
     )
     for cust in customers:
+        addr = _get_party_address("Customer", cust.name)
+        mailing_addr = _build_party_mailing_address(addr)
+
         ledger = etree.SubElement(
             tallymessage, "LEDGER",
             attrib={"NAME": cust.customer_name, "ACTION": "Create"}
@@ -149,9 +221,27 @@ def generate_parties_xml(company=None):
         _sub(ledger, "PARENT", settings.sundry_debtors_ledger or "Sundry Debtors")
         _sub(ledger, "ISBILLWISEON", "Yes")
         _sub(ledger, "AFFECTSSTOCK", "No")
-        if cust.tax_id:
-            _sub(ledger, "GSTREGISTRATIONTYPE", "Regular")
-            _sub(ledger, "PARTYGSTIN", cust.tax_id)
+
+        # Mailing / address details
+        if mailing_addr:
+            _sub(ledger, "ADDRESS", mailing_addr)
+        if addr["state"]:
+            _sub(ledger, "STATENAME", addr["state"])
+        if addr["country"]:
+            _sub(ledger, "COUNTRYNAME", addr["country"])
+        if addr["pincode"]:
+            _sub(ledger, "PINCODE", addr["pincode"])
+
+        # GST / Tax Registration details
+        # Priority: address-level GSTIN > customer-level tax_id
+        gstin = addr["gstin"] or cust.tax_id or ""
+        if gstin:
+            gst_type = _gst_reg_type(addr["gst_category"])
+            _sub(ledger, "GSTREGISTRATIONTYPE", gst_type)
+            _sub(ledger, "PARTYGSTIN", gstin)
+        elif cust.tax_id:  # PAN / other tax ID without GSTIN
+            _sub(ledger, "INCOMETAXNUMBER", cust.tax_id)
+
         count += 1
 
     suppliers = frappe.get_all(
@@ -159,6 +249,9 @@ def generate_parties_xml(company=None):
         fields=["name", "supplier_name", "supplier_group", "tax_id"]
     )
     for sup in suppliers:
+        addr = _get_party_address("Supplier", sup.name)
+        mailing_addr = _build_party_mailing_address(addr)
+
         ledger = etree.SubElement(
             tallymessage, "LEDGER",
             attrib={"NAME": sup.supplier_name, "ACTION": "Create"}
@@ -167,9 +260,26 @@ def generate_parties_xml(company=None):
         _sub(ledger, "PARENT", settings.sundry_creditors_ledger or "Sundry Creditors")
         _sub(ledger, "ISBILLWISEON", "Yes")
         _sub(ledger, "AFFECTSSTOCK", "No")
-        if sup.tax_id:
-            _sub(ledger, "GSTREGISTRATIONTYPE", "Regular")
-            _sub(ledger, "PARTYGSTIN", sup.tax_id)
+
+        # Mailing / address details
+        if mailing_addr:
+            _sub(ledger, "ADDRESS", mailing_addr)
+        if addr["state"]:
+            _sub(ledger, "STATENAME", addr["state"])
+        if addr["country"]:
+            _sub(ledger, "COUNTRYNAME", addr["country"])
+        if addr["pincode"]:
+            _sub(ledger, "PINCODE", addr["pincode"])
+
+        # GST / Tax Registration details
+        gstin = addr["gstin"] or sup.tax_id or ""
+        if gstin:
+            gst_type = _gst_reg_type(addr["gst_category"])
+            _sub(ledger, "GSTREGISTRATIONTYPE", gst_type)
+            _sub(ledger, "PARTYGSTIN", gstin)
+        elif sup.tax_id:  # PAN / other tax ID without GSTIN
+            _sub(ledger, "INCOMETAXNUMBER", sup.tax_id)
+
         count += 1
 
     return _to_xml_string(root), count
@@ -220,19 +330,22 @@ def generate_sales_invoice_xml(from_date=None, to_date=None, company=None):
         for item in doc.items:
             inventory_entry = etree.SubElement(voucher, "ALLINVENTORYENTRIES.LIST")
             _sub(inventory_entry, "STOCKITEMNAME", item.item_name or item.item_code)
-            _sub(inventory_entry, "ISDEEMEDPOSITIVE", "No") # Outward is No
-            
+            _sub(inventory_entry, "ISDEEMEDPOSITIVE", "No")  # Outward / sales = No
+
             _sub(inventory_entry, "RATE", f"{_amount(item.rate)}/{item.uom}")
+            # Sales: item amount is a CREDIT in the income account → positive value
             _sub(inventory_entry, "AMOUNT", _amount(item.base_amount))
             _sub(inventory_entry, "ACTUALQTY", f" {item.qty} {item.uom}")
             _sub(inventory_entry, "BILLEDQTY", f" {item.qty} {item.uom}")
-            
-            # Accounting Allocation for the Sales Ledger
+
+            # Accounting Allocation — REQUIRED by Tally for ISINVOICE=Yes vouchers.
+            # Each inventory entry must have at least one ACCOUNTINGALLOCATIONS.LIST child.
+            # The income ledger is CREDITED (ISDEEMEDPOSITIVE=No) with a positive amount.
             accounting_alloc = etree.SubElement(inventory_entry, "ACCOUNTINGALLOCATIONS.LIST")
-            ledger_name = _strip_company(item.income_account) if item.income_account else "Sales"
+            ledger_name = _strip_company(item.income_account) if item.income_account else (settings.sales_ledger or "Sales")
             _sub(accounting_alloc, "LEDGERNAME", ledger_name)
-            _sub(accounting_alloc, "ISDEEMEDPOSITIVE", "No")
-            _sub(accounting_alloc, "AMOUNT", _amount(item.base_amount))
+            _sub(accounting_alloc, "ISDEEMEDPOSITIVE", "No")   # Credit → No
+            _sub(accounting_alloc, "AMOUNT", _amount(item.base_amount))  # Positive credit amount
 
         # Ledger entries section
         # Party entry (Debit)
