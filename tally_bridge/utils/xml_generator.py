@@ -204,6 +204,228 @@ def _gst_reg_type(gst_category):
     return mapping.get(gst_category, "Regular") if gst_category else "Regular"
 
 
+def _add_party_ledger(tallymessage, party_name, parent_group, addr, tax_id):
+    ledger = etree.SubElement(
+        tallymessage, "LEDGER",
+        attrib={"NAME": party_name, "ACTION": "Create"}
+    )
+    
+    # Basic Information
+    _sub(ledger, "NAME", party_name)
+    _sub(ledger, "PARENT", parent_group)
+    
+    # Old Audit Entries
+    old_audit_list = etree.SubElement(ledger, "OLDAUDITENTRYIDS.LIST", TYPE="Number")
+    _sub(old_audit_list, "OLDAUDITENTRYIDS", "-1")
+
+    _sub(ledger, "CURRENCYNAME", "₹")
+    
+    # Regional and Tax classifications
+    if addr["state"]:
+        _sub(ledger, "PRIORSTATENAME", addr["state"])
+    _sub(ledger, "VATDEALERTYPE", "Regular")
+    _sub(ledger, "TAXCLASSIFICATIONNAME", "&#4; Not Applicable")
+    _sub(ledger, "TAXTYPE", "Others")
+    _sub(ledger, "BILLCREDITPERIOD", "30 Days")
+    
+    if addr["country"]:
+        _sub(ledger, "COUNTRYOFRESIDENCE", addr["country"])
+    _sub(ledger, "LEDGERCOUNTRYISDCODE", "+91")
+    
+    # Hardcoded defaults from Tally XML
+    defaults = [
+        ("GSTTYPE", "&#4; Not Applicable"),
+        ("APPROPRIATEFOR", "&#4; Not Applicable"),
+        ("GSTNATUREOFSUPPLY", "&#4; Not Applicable"),
+        ("SERVICECATEGORY", "&#4; Not Applicable"),
+        ("EXCISELEDGERCLASSIFICATION", "&#4; Not Applicable"),
+        ("EXCISEDUTYTYPE", "&#4; Not Applicable"),
+        ("EXCISENATUREOFPURCHASE", "&#4; Not Applicable"),
+        ("TDSDEDUCTEETYPE", "Company - Resident"),
+        ("LEDGERFBTCATEGORY", "&#4; Not Applicable"),
+        ("ISBILLWISEON", "Yes"),
+        ("ISCOSTCENTRESON", "No"),
+        ("ISINTERESTON", "No"),
+        ("ALLOWINMOBILE", "No"),
+        ("ISCOSTTRACKINGON", "No"),
+        ("ISBENEFICIARYCODEON", "No"),
+        ("ISEXPORTONVCHCREATE", "No"),
+        ("PLASINCOMEEXPENSE", "No"),
+        ("ISUPDATINGTARGETID", "No"),
+        ("ISDELETED", "No"),
+        ("ISSECURITYONWHENENTERED", "No"),
+        ("ASORIGINAL", "Yes"),
+        ("ISCONDENSED", "No"),
+        ("AFFECTSSTOCK", "No"),
+        ("ISRATEINCLUSIVEVAT", "No"),
+        ("FORPAYROLL", "No"),
+        ("ISABCENABLED", "No"),
+        ("ISCREDITDAYSCHKON", "No"),
+        ("INTERESTONBILLWISE", "No"),
+        ("OVERRIDEINTEREST", "No"),
+        ("OVERRIDEADVINTEREST", "No"),
+        ("USEFORVAT", "No"),
+        ("IGNORETDSEXEMPT", "No"),
+        ("ISTCSAPPLICABLE", "No"),
+        ("ISTDSAPPLICABLE", "Yes"),
+        ("ISFBTAPPLICABLE", "No"),
+        ("ISGSTAPPLICABLE", "No"),
+        ("ISEXCISEAPPLICABLE", "No"),
+        ("ISTDSEXPENSE", "No"),
+        ("ISEDLIAPPLICABLE", "No"),
+        ("ISRELATEDPARTY", "No"),
+        ("USEFORESIELIGIBILITY", "No"),
+        ("ISINTERESTINCLLASTDAY", "No"),
+        ("APPROPRIATETAXVALUE", "No"),
+        ("ISBEHAVEASDUTY", "No"),
+        ("INTERESTINCLDAYOFADDITION", "No"),
+        ("INTERESTINCLDAYOFDEDUCTION", "No"),
+        ("ISOTHTERRITORYASSESSEE", "No"),
+        ("IGNOREMISMATCHWITHWARNING", "No"),
+        ("USEASNOTIONALBANK", "No"),
+        ("BEHAVEASPAYMENTGATEWAY", "No"),
+        ("OVERRIDECREDITLIMIT", "No"),
+        ("ISAGAINSTFORMC", "No"),
+        ("ISCHEQUEPRINTINGENABLED", "Yes"),
+        ("ISPAYUPLOAD", "No"),
+        ("ISPAYBATCHONLYSAL", "No"),
+        ("ISBNFCODESUPPORTED", "No"),
+        ("ALLOWEXPORTWITHERRORS", "No"),
+        ("CONSIDERPURCHASEFOREXPORT", "No"),
+        ("ISTRANSPORTER", "No"),
+        ("ISECASHLEDGER", "No"),
+        ("USEFORNOTIONALITC", "No"),
+        ("ISECOMMOPERATOR", "No"),
+        ("OVERRIDEBASEDONREALIZATION", "No"),
+        ("ISECDIFFINSDATE", "No"),
+        ("SHOWINPAYSLIP", "No"),
+        ("USEFORGRATUITY", "No"),
+        ("ISTDSPROJECTED", "No"),
+        ("ISSALARYMULFILE", "No"),
+        ("FORSERVICETAX", "No"),
+        ("ISINPUTCREDIT", "No"),
+        ("ISEXEMPTED", "No"),
+        ("ISABATEMENTAPPLICABLE", "No"),
+        ("ISSTXPARTY", "No"),
+        ("ISSTXNONREALIZEDTYPE", "No"),
+        ("USEFORKKC", "No"),
+        ("USEFORSBC", "No"),
+        ("ISUSEDFORCVD", "No"),
+        ("LEDBELONGSTONONTAXABLE", "No"),
+        ("ISEXCISEMERCHANTEXPORTER", "No"),
+        ("ISPARTYEXEMPTED", "No"),
+        ("ISSEZPARTY", "No"),
+        ("TDSDEDUCTEEISSPECIALRATE", "No"),
+        ("ISECHEQUESUPPORTED", "No"),
+        ("ISEDDSUPPORTED", "No"),
+        ("HASECHEQUEDELIVERYMODE", "No"),
+        ("HASECHEQUEDELIVERYTO", "No"),
+        ("HASECHEQUEPRINTLOCATION", "No"),
+        ("HASECHEQUEPAYABLELOCATION", "No"),
+        ("HASECHEQUEBANKLOCATION", "No"),
+        ("HASEDDDELIVERYMODE", "No"),
+        ("HASEDDDELIVERYTO", "No"),
+        ("HASEDDPRINTLOCATION", "No"),
+        ("HASEDDPAYABLELOCATION", "No"),
+        ("HASEDDBANKLOCATION", "No"),
+        ("ISEBANKINGENABLED", "No"),
+        ("ISEXPORTFILEENCRYPTED", "No"),
+        ("ISBATCHENABLED", "No"),
+        ("ISPRODUCTCODEBASED", "No"),
+        ("HASEDDCITY", "No"),
+        ("HASECHEQUECITY", "No"),
+        ("ISFILENAMEFORMATSUPPORTED", "No"),
+        ("HASCLIENTCODE", "No"),
+        ("PAYINSISBATCHAPPLICABLE", "No"),
+        ("PAYINSISFILENUMAPP", "No"),
+        ("ISSALARYTRANSGROUPEDFORBRS", "No"),
+        ("ISEBANKINGSUPPORTED", "No"),
+        ("ISSCBUAE", "No"),
+        ("ISBANKSTATUSAPP", "No"),
+        ("ISSALARYGROUPED", "No"),
+        ("USEFORPURCHASETAX", "No"),
+        ("BANKISRECONCILEPERFECTMATCHES", "No"),
+        ("ISPYMTADVONLINE", "No"),
+        ("ISPYMTADVCCENABLED", "No"),
+        ("ISINCLUDEPYMTADVBILLWISE", "No"),
+        ("AUDITED", "No")
+    ]
+    for tag, val in defaults:
+        _sub(ledger, tag, val)
+        
+    # Empty Lists
+    empty_lists = [
+        "SERVICETAXDETAILS.LIST", "LBTREGNDETAILS.LIST", "VATDETAILS.LIST",
+        "SALESTAXCESSDETAILS.LIST", "GSTDETAILS.LIST", "HSNDETAILS.LIST",
+        "MSMEREGISTRATIONDETAILS.LIST", "XBRLDETAIL.LIST", "AUDITDETAILS.LIST",
+        "SCHVIDETAILS.LIST", "EXCISETARIFFDETAILS.LIST", "TCSCATEGORYDETAILS.LIST",
+        "TDSCATEGORYDETAILS.LIST", "SLABPERIOD.LIST", "GRATUITYPERIOD.LIST",
+        "ADDITIONALCOMPUTATIONS.LIST", "EXCISEJURISDICTIONDETAILS.LIST",
+        "EXCLUDEDTAXATIONS.LIST", "BANKALLOCATIONS.LIST", "PAYMENTDETAILS.LIST",
+        "BANKEXPORTFORMATS.LIST", "TRANSFERMODELIMITDETAILS.LIST", "BILLALLOCATIONS.LIST",
+        "INTERESTCOLLECTION.LIST", "LEDGERCLOSINGVALUES.LIST", "LEDGERAUDITCLASS.LIST",
+        "OLDAUDITENTRIES.LIST", "TDSEXEMPTIONRULES.LIST", "LOWERDEDUCTION.LIST",
+        "STXABATEMENTDETAILS.LIST", "LEDMULTIADDRESSLIST.LIST", "STXTAXDETAILS.LIST",
+        "CHEQUERANGE.LIST", "DEFAULTVCHCHEQUEDETAILS.LIST", "ACCOUNTAUDITENTRIES.LIST",
+        "AUDITENTRIES.LIST", "BRSIMPORTEDINFO.LIST", "AUTOBRSCONFIGS.LIST",
+        "BANKURENTRIES.LIST", "DEFAULTCHEQUEDETAILS.LIST", "DEFAULTOPENINGCHEQUEDETAILS.LIST",
+        "CANCELLEDPAYALLOCATIONS.LIST", "ECHEQUEPRINTLOCATION.LIST", "ECHEQUEPAYABLELOCATION.LIST",
+        "EDDPRINTLOCATION.LIST", "EDDPAYABLELOCATION.LIST", "AVAILABLETRANSACTIONTYPES.LIST",
+        "LEDPAYINSCONFIGS.LIST", "TYPECODEDETAILS.LIST", "FIELDVALIDATIONDETAILS.LIST",
+        "INPUTCRALLOCS.LIST", "TCSMETHODOFCALCULATION.LIST", "GSTRECONPREFIXSUFFIXDETAILS.LIST",
+        "GSTCLASSFNIGSTRATES.LIST", "EXTARIFFDUTYHEADDETAILS.LIST", "TEMPGSTITEMSLABRATES.LIST",
+        "LEDGSTADDRESS.LIST", "VOUCHERTYPEPRODUCTCODES.LIST", "LEDADDRESS.LIST",
+        "DEFMULTIPLETOPHONENO.LIST"
+    ]
+    for tag in empty_lists:
+        etree.SubElement(ledger, tag)
+
+    # GST registration block
+    gstin = addr["gstin"] or tax_id or ""
+    if gstin:
+        gst_type = _gst_reg_type(addr["gst_category"])
+        gst_list = etree.SubElement(ledger, "LEDGSTREGDETAILS.LIST")
+        _sub(gst_list, "APPLICABLEFROM", _tally_date(frappe.utils.today()))
+        _sub(gst_list, "GSTREGISTRATIONTYPE", gst_type)
+        if addr["state"]:
+            _sub(gst_list, "PLACEOFSUPPLY", addr["state"])
+        _sub(gst_list, "GSTIN", gstin)
+        _sub(gst_list, "ISOTHTERRITORYASSESSEE", "No")
+        _sub(gst_list, "CONSIDERPURCHASEFOREXPORT", "No")
+        _sub(gst_list, "ISTRANSPORTER", "No")
+        _sub(gst_list, "ISCOMMONPARTY", "No")
+    elif tax_id:
+        _sub(ledger, "INCOMETAXNUMBER", tax_id)
+
+    # Mailing address block — multi-line ADDRESS.LIST
+    addr_lines = _build_address_lines(addr)
+    mail_list = etree.SubElement(ledger, "LEDMAILINGDETAILS.LIST")
+    addr_list_el = etree.SubElement(mail_list, "ADDRESS.LIST", TYPE="String")
+    for line in addr_lines:
+        _sub(addr_list_el, "ADDRESS", line)
+    _sub(mail_list, "APPLICABLEFROM", _tally_date(frappe.utils.today()))
+    if addr["pincode"]:
+        _sub(mail_list, "PINCODE", addr["pincode"])
+    _sub(mail_list, "MAILINGNAME", party_name)
+    if addr["state"]:
+        _sub(mail_list, "STATE", addr["state"])
+    if addr["country"]:
+        _sub(mail_list, "COUNTRY", addr["country"])
+        
+    lang_list = etree.SubElement(ledger, "LANGUAGENAME.LIST")
+    name_list = etree.SubElement(lang_list, "NAME.LIST", TYPE="String")
+    _sub(name_list, "NAME", party_name)
+    _sub(lang_list, "LANGUAGEID", "1033")
+
+    deduct_rules = etree.SubElement(ledger, "DEDUCTINSAMEVCHRULES.LIST")
+    _sub(deduct_rules, "NATUREOFPAYMENT", "&#4; All Items")
+    
+    contact_details = etree.SubElement(ledger, "CONTACTDETAILS.LIST")
+    _sub(contact_details, "NAME", "Primary Mobile No.")
+    _sub(contact_details, "COUNTRYISDCODE", "+91")
+    _sub(contact_details, "ISDEFAULTWHATSAPPNUM", "Yes")
+
+
 def generate_parties_xml(company=None):
     """Export Customers and Suppliers as Tally ledgers under Sundry Debtors/Creditors.
     Includes mailing address, state, country, pincode, GSTIN and GST registration type.
@@ -219,49 +441,7 @@ def generate_parties_xml(company=None):
     )
     for cust in customers:
         addr = _get_party_address("Customer", cust.name)
-        mailing_addr = _build_party_mailing_address(addr)
-
-        ledger = etree.SubElement(
-            tallymessage, "LEDGER",
-            attrib={"NAME": cust.customer_name, "ACTION": "Create"}
-        )
-        _sub(ledger, "NAME", cust.customer_name)
-        _sub(ledger, "PARENT", settings.sundry_debtors_ledger or "Sundry Debtors")
-        _sub(ledger, "ISBILLWISEON", "Yes")
-        _sub(ledger, "AFFECTSSTOCK", "No")
-        if addr["country"]:
-            _sub(ledger, "COUNTRYOFRESIDENCE", addr["country"])
-        if addr["state"]:
-            _sub(ledger, "PRIORSTATENAME", addr["state"])
-
-        # GST registration block
-        gstin = addr["gstin"] or cust.tax_id or ""
-        if gstin:
-            gst_type = _gst_reg_type(addr["gst_category"])
-            gst_list = etree.SubElement(ledger, "LEDGSTREGDETAILS.LIST")
-            _sub(gst_list, "APPLICABLEFROM", _tally_date(frappe.utils.today()))
-            _sub(gst_list, "GSTREGISTRATIONTYPE", gst_type)
-            if addr["state"]:
-                _sub(gst_list, "PLACEOFSUPPLY", addr["state"])
-            _sub(gst_list, "GSTIN", gstin)
-        elif cust.tax_id:
-            _sub(ledger, "INCOMETAXNUMBER", cust.tax_id)
-
-        # Mailing address block — multi-line ADDRESS.LIST
-        addr_lines = _build_address_lines(addr)
-        mail_list = etree.SubElement(ledger, "LEDMAILINGDETAILS.LIST")
-        addr_list_el = etree.SubElement(mail_list, "ADDRESS.LIST", TYPE="String")
-        for line in addr_lines:
-            _sub(addr_list_el, "ADDRESS", line)
-        _sub(mail_list, "APPLICABLEFROM", _tally_date(frappe.utils.today()))
-        if addr["pincode"]:
-            _sub(mail_list, "PINCODE", addr["pincode"])
-        _sub(mail_list, "MAILINGNAME", cust.customer_name)
-        if addr["state"]:
-            _sub(mail_list, "STATE", addr["state"])
-        if addr["country"]:
-            _sub(mail_list, "COUNTRY", addr["country"])
-
+        _add_party_ledger(tallymessage, cust.customer_name, settings.sundry_debtors_ledger or "Sundry Debtors", addr, cust.tax_id)
         count += 1
 
     suppliers = frappe.get_all(
@@ -270,49 +450,7 @@ def generate_parties_xml(company=None):
     )
     for sup in suppliers:
         addr = _get_party_address("Supplier", sup.name)
-        mailing_addr = _build_party_mailing_address(addr)
-
-        ledger = etree.SubElement(
-            tallymessage, "LEDGER",
-            attrib={"NAME": sup.supplier_name, "ACTION": "Create"}
-        )
-        _sub(ledger, "NAME", sup.supplier_name)
-        _sub(ledger, "PARENT", settings.sundry_creditors_ledger or "Sundry Creditors")
-        _sub(ledger, "ISBILLWISEON", "Yes")
-        _sub(ledger, "AFFECTSSTOCK", "No")
-        if addr["country"]:
-            _sub(ledger, "COUNTRYOFRESIDENCE", addr["country"])
-        if addr["state"]:
-            _sub(ledger, "PRIORSTATENAME", addr["state"])
-
-        # GST registration block
-        gstin = addr["gstin"] or sup.tax_id or ""
-        if gstin:
-            gst_type = _gst_reg_type(addr["gst_category"])
-            gst_list = etree.SubElement(ledger, "LEDGSTREGDETAILS.LIST")
-            _sub(gst_list, "APPLICABLEFROM", _tally_date(frappe.utils.today()))
-            _sub(gst_list, "GSTREGISTRATIONTYPE", gst_type)
-            if addr["state"]:
-                _sub(gst_list, "PLACEOFSUPPLY", addr["state"])
-            _sub(gst_list, "GSTIN", gstin)
-        elif sup.tax_id:
-            _sub(ledger, "INCOMETAXNUMBER", sup.tax_id)
-
-        # Mailing address block — multi-line ADDRESS.LIST
-        addr_lines = _build_address_lines(addr)
-        mail_list = etree.SubElement(ledger, "LEDMAILINGDETAILS.LIST")
-        addr_list_el = etree.SubElement(mail_list, "ADDRESS.LIST", TYPE="String")
-        for line in addr_lines:
-            _sub(addr_list_el, "ADDRESS", line)
-        _sub(mail_list, "APPLICABLEFROM", _tally_date(frappe.utils.today()))
-        if addr["pincode"]:
-            _sub(mail_list, "PINCODE", addr["pincode"])
-        _sub(mail_list, "MAILINGNAME", sup.supplier_name)
-        if addr["state"]:
-            _sub(mail_list, "STATE", addr["state"])
-        if addr["country"]:
-            _sub(mail_list, "COUNTRY", addr["country"])
-
+        _add_party_ledger(tallymessage, sup.supplier_name, settings.sundry_creditors_ledger or "Sundry Creditors", addr, sup.tax_id)
         count += 1
 
     return _to_xml_string(root), count
