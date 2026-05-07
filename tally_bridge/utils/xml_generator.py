@@ -218,7 +218,7 @@ def _add_party_ledger(tallymessage, party_name, parent_group, addr, tax_id):
     old_audit_list = etree.SubElement(ledger, "OLDAUDITENTRYIDS.LIST", TYPE="Number")
     _sub(old_audit_list, "OLDAUDITENTRYIDS", "-1")
 
-    _sub(ledger, "CURRENCYNAME", "₹")
+    _sub(ledger, "CURRENCYNAME", "INR")
     
     # Regional and Tax classifications
     if addr["state"]:
