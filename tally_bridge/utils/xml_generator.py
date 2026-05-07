@@ -164,19 +164,27 @@ def _get_party_address(party_type, party_name):
         return empty
 
 
-def _build_party_mailing_address(addr):
+def _build_address_lines(addr):
     """
-    Combine address lines into a single mailing address string for Tally.
-    Tally uses the ADDRESS tag (can be multi-line, but we join with comma).
+    Return a list of non-empty address line strings for Tally's ADDRESS.LIST.
+    Each element becomes a separate <ADDRESS> child in the list, which is how
+    Tally Prime stores multi-line mailing addresses.
     """
-    parts = []
-    for f in ["address_line1", "address_line2", "city"]:
-        val = addr.get(f, "").strip()
-        if val:
-            parts.append(val)
-    if addr.get("pincode"):
-        parts.append(addr["pincode"].strip())
-    return ", ".join(parts)
+    lines = []
+    if addr.get("address_line1", "").strip():
+        lines.append(addr["address_line1"].strip())
+    if addr.get("address_line2", "").strip():
+        lines.append(addr["address_line2"].strip())
+    # City + Pincode on the last line, e.g. "Coimbatore - 641035"
+    city = addr.get("city", "").strip()
+    pin  = addr.get("pincode", "").strip()
+    if city and pin:
+        lines.append(f"{city} - {pin}")
+    elif city:
+        lines.append(city)
+    elif pin:
+        lines.append(pin)
+    return lines
 
 
 def _gst_reg_type(gst_category):
@@ -221,26 +229,38 @@ def generate_parties_xml(company=None):
         _sub(ledger, "PARENT", settings.sundry_debtors_ledger or "Sundry Debtors")
         _sub(ledger, "ISBILLWISEON", "Yes")
         _sub(ledger, "AFFECTSSTOCK", "No")
-
-        # Mailing / address details
-        if mailing_addr:
-            _sub(ledger, "ADDRESS", mailing_addr)
-        if addr["state"]:
-            _sub(ledger, "STATENAME", addr["state"])
         if addr["country"]:
-            _sub(ledger, "COUNTRYNAME", addr["country"])
-        if addr["pincode"]:
-            _sub(ledger, "PINCODE", addr["pincode"])
+            _sub(ledger, "COUNTRYOFRESIDENCE", addr["country"])
+        if addr["state"]:
+            _sub(ledger, "PRIORSTATENAME", addr["state"])
 
-        # GST / Tax Registration details
-        # Priority: address-level GSTIN > customer-level tax_id
+        # GST registration block
         gstin = addr["gstin"] or cust.tax_id or ""
         if gstin:
             gst_type = _gst_reg_type(addr["gst_category"])
-            _sub(ledger, "GSTREGISTRATIONTYPE", gst_type)
-            _sub(ledger, "PARTYGSTIN", gstin)
-        elif cust.tax_id:  # PAN / other tax ID without GSTIN
+            gst_list = etree.SubElement(ledger, "LEDGSTREGDETAILS.LIST")
+            _sub(gst_list, "APPLICABLEFROM", _tally_date(frappe.utils.today()))
+            _sub(gst_list, "GSTREGISTRATIONTYPE", gst_type)
+            if addr["state"]:
+                _sub(gst_list, "PLACEOFSUPPLY", addr["state"])
+            _sub(gst_list, "GSTIN", gstin)
+        elif cust.tax_id:
             _sub(ledger, "INCOMETAXNUMBER", cust.tax_id)
+
+        # Mailing address block — multi-line ADDRESS.LIST
+        addr_lines = _build_address_lines(addr)
+        mail_list = etree.SubElement(ledger, "LEDMAILINGDETAILS.LIST")
+        addr_list_el = etree.SubElement(mail_list, "ADDRESS.LIST", TYPE="String")
+        for line in addr_lines:
+            _sub(addr_list_el, "ADDRESS", line)
+        _sub(mail_list, "APPLICABLEFROM", _tally_date(frappe.utils.today()))
+        if addr["pincode"]:
+            _sub(mail_list, "PINCODE", addr["pincode"])
+        _sub(mail_list, "MAILINGNAME", cust.customer_name)
+        if addr["state"]:
+            _sub(mail_list, "STATE", addr["state"])
+        if addr["country"]:
+            _sub(mail_list, "COUNTRY", addr["country"])
 
         count += 1
 
@@ -260,25 +280,38 @@ def generate_parties_xml(company=None):
         _sub(ledger, "PARENT", settings.sundry_creditors_ledger or "Sundry Creditors")
         _sub(ledger, "ISBILLWISEON", "Yes")
         _sub(ledger, "AFFECTSSTOCK", "No")
-
-        # Mailing / address details
-        if mailing_addr:
-            _sub(ledger, "ADDRESS", mailing_addr)
-        if addr["state"]:
-            _sub(ledger, "STATENAME", addr["state"])
         if addr["country"]:
-            _sub(ledger, "COUNTRYNAME", addr["country"])
-        if addr["pincode"]:
-            _sub(ledger, "PINCODE", addr["pincode"])
+            _sub(ledger, "COUNTRYOFRESIDENCE", addr["country"])
+        if addr["state"]:
+            _sub(ledger, "PRIORSTATENAME", addr["state"])
 
-        # GST / Tax Registration details
+        # GST registration block
         gstin = addr["gstin"] or sup.tax_id or ""
         if gstin:
             gst_type = _gst_reg_type(addr["gst_category"])
-            _sub(ledger, "GSTREGISTRATIONTYPE", gst_type)
-            _sub(ledger, "PARTYGSTIN", gstin)
-        elif sup.tax_id:  # PAN / other tax ID without GSTIN
+            gst_list = etree.SubElement(ledger, "LEDGSTREGDETAILS.LIST")
+            _sub(gst_list, "APPLICABLEFROM", _tally_date(frappe.utils.today()))
+            _sub(gst_list, "GSTREGISTRATIONTYPE", gst_type)
+            if addr["state"]:
+                _sub(gst_list, "PLACEOFSUPPLY", addr["state"])
+            _sub(gst_list, "GSTIN", gstin)
+        elif sup.tax_id:
             _sub(ledger, "INCOMETAXNUMBER", sup.tax_id)
+
+        # Mailing address block — multi-line ADDRESS.LIST
+        addr_lines = _build_address_lines(addr)
+        mail_list = etree.SubElement(ledger, "LEDMAILINGDETAILS.LIST")
+        addr_list_el = etree.SubElement(mail_list, "ADDRESS.LIST", TYPE="String")
+        for line in addr_lines:
+            _sub(addr_list_el, "ADDRESS", line)
+        _sub(mail_list, "APPLICABLEFROM", _tally_date(frappe.utils.today()))
+        if addr["pincode"]:
+            _sub(mail_list, "PINCODE", addr["pincode"])
+        _sub(mail_list, "MAILINGNAME", sup.supplier_name)
+        if addr["state"]:
+            _sub(mail_list, "STATE", addr["state"])
+        if addr["country"]:
+            _sub(mail_list, "COUNTRY", addr["country"])
 
         count += 1
 
