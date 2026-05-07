@@ -224,7 +224,7 @@ def _add_party_ledger(tallymessage, party_name, parent_group, addr, tax_id):
     if addr["state"]:
         _sub(ledger, "PRIORSTATENAME", addr["state"])
     _sub(ledger, "VATDEALERTYPE", "Regular")
-    _sub(ledger, "TAXCLASSIFICATIONNAME", "&#4; Not Applicable")
+    _sub(ledger, "TAXCLASSIFICATIONNAME", "")
     _sub(ledger, "TAXTYPE", "Others")
     _sub(ledger, "BILLCREDITPERIOD", "30 Days")
     
