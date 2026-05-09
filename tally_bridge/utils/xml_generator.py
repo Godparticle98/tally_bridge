@@ -868,20 +868,61 @@ def generate_uoms_xml(company=None):
 # Stock Items
 # ─────────────────────────────────────────────────────────────────────────────
 
-def generate_stock_items_xml(company=None):
-    """Export Stock Items to Tally."""
+def generate_stock_groups_xml(company=None):
+    """Export Item Groups to Tally as Stock Groups."""
     settings = _settings()
     company = company or frappe.defaults.get_user_default("Company")
     root, tallymessage = _envelope(company)
 
-    items = frappe.get_all(
-        "Item",
-        fields=["name", "item_name", "item_group", "stock_uom", "description", "standard_rate"]
+    groups = frappe.get_all(
+        "Item Group",
+        fields=["name", "item_group_name", "parent_item_group"]
     )
     count = 0
+    for grp in groups:
+        stockgroup = etree.SubElement(
+            tallymessage, "STOCKGROUP",
+            attrib={"NAME": grp.item_group_name or grp.name, "ACTION": "Create"}
+        )
+        _sub(stockgroup, "NAME", grp.item_group_name or grp.name)
+        
+        parent = grp.parent_item_group
+        if parent and parent != "All Item Groups":
+            _sub(stockgroup, "PARENT", parent)
+        else:
+            _sub(stockgroup, "PARENT", "")
+            
+        _sub(stockgroup, "ISADDABLE", "Yes")
+        
+        # Default empty GST and HSN blocks for group, Tally will use 'As per Company' or let items override
+        gst_list = etree.SubElement(stockgroup, "GSTDETAILS.LIST")
+        _sub(gst_list, "APPLICABLEFROM", _tally_date(frappe.utils.today()))
+        _sub(gst_list, "SRCOFGSTDETAILS", "As per Company/Stock Group")
+        
+        hsn_list = etree.SubElement(stockgroup, "HSNDETAILS.LIST")
+        _sub(hsn_list, "APPLICABLEFROM", _tally_date(frappe.utils.today()))
+        _sub(hsn_list, "SRCOFHSNDETAILS", "As per Company/Stock Group")
+        
+        count += 1
+
+    return _to_xml_string(root), count
+
+
+def generate_stock_items_xml(company=None):
+    """Export Stock Items to Tally with enhanced details like GST and HSN."""
+    settings = _settings()
+    company = company or frappe.defaults.get_user_default("Company")
+    root, tallymessage = _envelope(company)
+
+    # Fetching item fields including India compliance GST/HSN fields if they exist
+    fields = ["name", "item_name", "item_group", "stock_uom", "description", "standard_rate", "is_stock_item", "has_batch_no", "valuation_method"]
+    if frappe.db.has_column("Item", "gst_hsn_code"):
+        fields.append("gst_hsn_code")
+
+    items = frappe.get_all("Item", fields=fields)
+    count = 0
+    
     for item in items:
-        # Generate item group if needed, but Tally allows basic import without predefined group if we use Primary
-        # For safety, map to Primary if the item_group doesn't exist in Tally, or let Tally handle it
         stockitem = etree.SubElement(
             tallymessage, "STOCKITEM",
             attrib={"NAME": item.item_name or item.name, "ACTION": "Create"}
@@ -890,6 +931,39 @@ def generate_stock_items_xml(company=None):
         _sub(stockitem, "PARENT", item.item_group or "Primary")
         _sub(stockitem, "BASEUNITS", item.stock_uom or "Nos")
         _sub(stockitem, "DESCRIPTION", cstr(item.description))
+        
+        # Type of Supply
+        type_of_supply = "Goods" if item.is_stock_item else "Services"
+        _sub(stockitem, "GSTTYPEOFSUPPLY", type_of_supply)
+        _sub(stockitem, "GSTAPPLICABLE", "\u0004 Applicable")
+        
+        # Batch and Valuation
+        is_batch = "Yes" if item.has_batch_no else "No"
+        _sub(stockitem, "ISBATCHWISEON", is_batch)
+        
+        val_method = "Avg. Cost"
+        if item.valuation_method == "FIFO":
+            val_method = "FIFO"
+        _sub(stockitem, "COSTINGMETHOD", val_method)
+        _sub(stockitem, "VALUATIONMETHOD", "Avg. Price")
+        _sub(stockitem, "ISDELETED", "No")
+
+        # GST Details
+        gst_list = etree.SubElement(stockitem, "GSTDETAILS.LIST")
+        _sub(gst_list, "APPLICABLEFROM", _tally_date(frappe.utils.today()))
+        _sub(gst_list, "SRCOFGSTDETAILS", "Specify Details Here" if item.get("gst_hsn_code") else "As per Company/Stock Group")
+        _sub(gst_list, "TAXABILITY", "Taxable")
+        
+        # HSN Details
+        hsn_list = etree.SubElement(stockitem, "HSNDETAILS.LIST")
+        _sub(hsn_list, "APPLICABLEFROM", _tally_date(frappe.utils.today()))
+        hsn_code = item.get("gst_hsn_code")
+        if hsn_code:
+            _sub(hsn_list, "SRCOFHSNDETAILS", "Specify Details Here")
+            _sub(hsn_list, "HSNCODE", cstr(hsn_code))
+        else:
+            _sub(hsn_list, "SRCOFHSNDETAILS", "As per Company/Stock Group")
+            
         count += 1
 
     return _to_xml_string(root), count
@@ -920,6 +994,7 @@ def generate_full_export_xml(from_date=None, to_date=None, company=None):
     total = 0
     generators = [
         (settings.get("include_uoms", 1), generate_uoms_xml, {}),
+        (settings.get("include_stock_groups", 1), generate_stock_groups_xml, {}),
         (settings.get("include_stock_items", 1), generate_stock_items_xml, {}),
         (settings.include_chart_of_accounts, generate_chart_of_accounts_xml, {}),
         (settings.include_parties, generate_parties_xml, {}),
