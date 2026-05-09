@@ -935,7 +935,7 @@ def generate_stock_items_xml(company=None):
         # Type of Supply
         type_of_supply = "Goods" if item.is_stock_item else "Services"
         _sub(stockitem, "GSTTYPEOFSUPPLY", type_of_supply)
-        _sub(stockitem, "GSTAPPLICABLE", "\u0004 Applicable")
+        _sub(stockitem, "GSTAPPLICABLE", "Applicable")
         
         # Batch and Valuation
         is_batch = "Yes" if item.has_batch_no else "No"
