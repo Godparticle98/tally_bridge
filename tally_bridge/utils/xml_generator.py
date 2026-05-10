@@ -31,6 +31,15 @@ def _tally_date(dt):
     return dt.strftime("%Y%m%d")
 
 
+def _get_applicable_from_date(from_date=None):
+    """Determine the applicable from date based on user filter or financial year start."""
+    if from_date:
+        return _tally_date(from_date)
+    today = frappe.utils.getdate(frappe.utils.today())
+    fy_year = today.year if today.month >= 4 else today.year - 1
+    return f"{fy_year}0401"
+
+
 def _amount(val):
     """Format amount as string with 2 decimal places."""
     return f"{flt(val, 2):.2f}"
@@ -97,7 +106,7 @@ _ACCOUNT_GROUP_MAP = {
 }
 
 
-def generate_chart_of_accounts_xml(company=None):
+def generate_chart_of_accounts_xml(from_date=None, to_date=None, company=None):
     """Export all GL Accounts as Tally ledgers."""
     settings = _settings()
     company = company or frappe.defaults.get_user_default("Company")
@@ -194,17 +203,18 @@ def _gst_reg_type(gst_category):
     mapping = {
         "Registered Regular": "Regular",
         "Registered Composition": "Composition",
-        "SEZ": "SEZ",
+        "SEZ": "Regular-SEZ",
         "Overseas": "Overseas",
         "Consumer": "Consumer",
         "Deemed Export": "Deemed Exports - Refund",
         "UIN Holders": "UIN Holders",
         "Tax Deductor": "Tax Deductor",
+        "Unregistered": "Unregistered",
     }
     return mapping.get(gst_category, "Regular") if gst_category else "Regular"
 
 
-def _add_party_ledger(tallymessage, party_name, parent_group, addr, tax_id):
+def _add_party_ledger(tallymessage, party_name, parent_group, addr, tax_id, applicable_from):
     ledger = etree.SubElement(
         tallymessage, "LEDGER",
         attrib={"NAME": party_name, "ACTION": "Create"}
@@ -232,160 +242,18 @@ def _add_party_ledger(tallymessage, party_name, parent_group, addr, tax_id):
         _sub(ledger, "COUNTRYOFRESIDENCE", addr["country"])
     _sub(ledger, "LEDGERCOUNTRYISDCODE", "+91")
     
-    # Hardcoded defaults from Tally XML
-    defaults = [
-        ("GSTTYPE", ""),
-        ("APPROPRIATEFOR", ""),
-        ("GSTNATUREOFSUPPLY", ""),
-        ("SERVICECATEGORY", ""),
-        ("EXCISELEDGERCLASSIFICATION", ""),
-        ("EXCISEDUTYTYPE", ""),
-        ("EXCISENATUREOFPURCHASE", ""),
-        ("TDSDEDUCTEETYPE", ""),
-        ("LEDGERFBTCATEGORY", ""),
-        ("ISBILLWISEON", "Yes"),
-        ("ISCOSTCENTRESON", "No"),
-        ("ISINTERESTON", "No"),
-        ("ALLOWINMOBILE", "No"),
-        ("ISCOSTTRACKINGON", "No"),
-        ("ISBENEFICIARYCODEON", "No"),
-        ("ISEXPORTONVCHCREATE", "No"),
-        ("PLASINCOMEEXPENSE", "No"),
-        ("ISUPDATINGTARGETID", "No"),
-        ("ISDELETED", "No"),
-        ("ISSECURITYONWHENENTERED", "No"),
-        ("ASORIGINAL", "Yes"),
-        ("ISCONDENSED", "No"),
-        ("AFFECTSSTOCK", "No"),
-        ("ISRATEINCLUSIVEVAT", "No"),
-        ("FORPAYROLL", "No"),
-        ("ISABCENABLED", "No"),
-        ("ISCREDITDAYSCHKON", "No"),
-        ("INTERESTONBILLWISE", "No"),
-        ("OVERRIDEINTEREST", "No"),
-        ("OVERRIDEADVINTEREST", "No"),
-        ("USEFORVAT", "No"),
-        ("IGNORETDSEXEMPT", "No"),
-        ("ISTCSAPPLICABLE", "No"),
-        ("ISTDSAPPLICABLE", "Yes"),
-        ("ISFBTAPPLICABLE", "No"),
-        ("ISGSTAPPLICABLE", "No"),
-        ("ISEXCISEAPPLICABLE", "No"),
-        ("ISTDSEXPENSE", "No"),
-        ("ISEDLIAPPLICABLE", "No"),
-        ("ISRELATEDPARTY", "No"),
-        ("USEFORESIELIGIBILITY", "No"),
-        ("ISINTERESTINCLLASTDAY", "No"),
-        ("APPROPRIATETAXVALUE", "No"),
-        ("ISBEHAVEASDUTY", "No"),
-        ("INTERESTINCLDAYOFADDITION", "No"),
-        ("INTERESTINCLDAYOFDEDUCTION", "No"),
-        ("ISOTHTERRITORYASSESSEE", "No"),
-        ("IGNOREMISMATCHWITHWARNING", "No"),
-        ("USEASNOTIONALBANK", "No"),
-        ("BEHAVEASPAYMENTGATEWAY", "No"),
-        ("OVERRIDECREDITLIMIT", "No"),
-        ("ISAGAINSTFORMC", "No"),
-        ("ISCHEQUEPRINTINGENABLED", "Yes"),
-        ("ISPAYUPLOAD", "No"),
-        ("ISPAYBATCHONLYSAL", "No"),
-        ("ISBNFCODESUPPORTED", "No"),
-        ("ALLOWEXPORTWITHERRORS", "No"),
-        ("CONSIDERPURCHASEFOREXPORT", "No"),
-        ("ISTRANSPORTER", "No"),
-        ("ISECASHLEDGER", "No"),
-        ("USEFORNOTIONALITC", "No"),
-        ("ISECOMMOPERATOR", "No"),
-        ("OVERRIDEBASEDONREALIZATION", "No"),
-        ("ISECDIFFINSDATE", "No"),
-        ("SHOWINPAYSLIP", "No"),
-        ("USEFORGRATUITY", "No"),
-        ("ISTDSPROJECTED", "No"),
-        ("ISSALARYMULFILE", "No"),
-        ("FORSERVICETAX", "No"),
-        ("ISINPUTCREDIT", "No"),
-        ("ISEXEMPTED", "No"),
-        ("ISABATEMENTAPPLICABLE", "No"),
-        ("ISSTXPARTY", "No"),
-        ("ISSTXNONREALIZEDTYPE", "No"),
-        ("USEFORKKC", "No"),
-        ("USEFORSBC", "No"),
-        ("ISUSEDFORCVD", "No"),
-        ("LEDBELONGSTONONTAXABLE", "No"),
-        ("ISEXCISEMERCHANTEXPORTER", "No"),
-        ("ISPARTYEXEMPTED", "No"),
-        ("ISSEZPARTY", "No"),
-        ("TDSDEDUCTEEISSPECIALRATE", "No"),
-        ("ISECHEQUESUPPORTED", "No"),
-        ("ISEDDSUPPORTED", "No"),
-        ("HASECHEQUEDELIVERYMODE", "No"),
-        ("HASECHEQUEDELIVERYTO", "No"),
-        ("HASECHEQUEPRINTLOCATION", "No"),
-        ("HASECHEQUEPAYABLELOCATION", "No"),
-        ("HASECHEQUEBANKLOCATION", "No"),
-        ("HASEDDDELIVERYMODE", "No"),
-        ("HASEDDDELIVERYTO", "No"),
-        ("HASEDDPRINTLOCATION", "No"),
-        ("HASEDDPAYABLELOCATION", "No"),
-        ("HASEDDBANKLOCATION", "No"),
-        ("ISEBANKINGENABLED", "No"),
-        ("ISEXPORTFILEENCRYPTED", "No"),
-        ("ISBATCHENABLED", "No"),
-        ("ISPRODUCTCODEBASED", "No"),
-        ("HASEDDCITY", "No"),
-        ("HASECHEQUECITY", "No"),
-        ("ISFILENAMEFORMATSUPPORTED", "No"),
-        ("HASCLIENTCODE", "No"),
-        ("PAYINSISBATCHAPPLICABLE", "No"),
-        ("PAYINSISFILENUMAPP", "No"),
-        ("ISSALARYTRANSGROUPEDFORBRS", "No"),
-        ("ISEBANKINGSUPPORTED", "No"),
-        ("ISSCBUAE", "No"),
-        ("ISBANKSTATUSAPP", "No"),
-        ("ISSALARYGROUPED", "No"),
-        ("USEFORPURCHASETAX", "No"),
-        ("BANKISRECONCILEPERFECTMATCHES", "No"),
-        ("ISPYMTADVONLINE", "No"),
-        ("ISPYMTADVCCENABLED", "No"),
-        ("ISINCLUDEPYMTADVBILLWISE", "No"),
-        ("AUDITED", "No")
-    ]
-    for tag, val in defaults:
-        _sub(ledger, tag, val)
-        
-    # Empty Lists
-    empty_lists = [
-        "SERVICETAXDETAILS.LIST", "LBTREGNDETAILS.LIST", "VATDETAILS.LIST",
-        "SALESTAXCESSDETAILS.LIST", "GSTDETAILS.LIST", "HSNDETAILS.LIST",
-        "MSMEREGISTRATIONDETAILS.LIST", "XBRLDETAIL.LIST", "AUDITDETAILS.LIST",
-        "SCHVIDETAILS.LIST", "EXCISETARIFFDETAILS.LIST", "TCSCATEGORYDETAILS.LIST",
-        "TDSCATEGORYDETAILS.LIST", "SLABPERIOD.LIST", "GRATUITYPERIOD.LIST",
-        "ADDITIONALCOMPUTATIONS.LIST", "EXCISEJURISDICTIONDETAILS.LIST",
-        "EXCLUDEDTAXATIONS.LIST", "BANKALLOCATIONS.LIST", "PAYMENTDETAILS.LIST",
-        "BANKEXPORTFORMATS.LIST", "TRANSFERMODELIMITDETAILS.LIST", "BILLALLOCATIONS.LIST",
-        "INTERESTCOLLECTION.LIST", "LEDGERCLOSINGVALUES.LIST", "LEDGERAUDITCLASS.LIST",
-        "OLDAUDITENTRIES.LIST", "TDSEXEMPTIONRULES.LIST", "LOWERDEDUCTION.LIST",
-        "STXABATEMENTDETAILS.LIST", "LEDMULTIADDRESSLIST.LIST", "STXTAXDETAILS.LIST",
-        "CHEQUERANGE.LIST", "DEFAULTVCHCHEQUEDETAILS.LIST", "ACCOUNTAUDITENTRIES.LIST",
-        "AUDITENTRIES.LIST", "BRSIMPORTEDINFO.LIST", "AUTOBRSCONFIGS.LIST",
-        "BANKURENTRIES.LIST", "DEFAULTCHEQUEDETAILS.LIST", "DEFAULTOPENINGCHEQUEDETAILS.LIST",
-        "CANCELLEDPAYALLOCATIONS.LIST", "ECHEQUEPRINTLOCATION.LIST", "ECHEQUEPAYABLELOCATION.LIST",
-        "EDDPRINTLOCATION.LIST", "EDDPAYABLELOCATION.LIST", "AVAILABLETRANSACTIONTYPES.LIST",
-        "LEDPAYINSCONFIGS.LIST", "TYPECODEDETAILS.LIST", "FIELDVALIDATIONDETAILS.LIST",
-        "INPUTCRALLOCS.LIST", "TCSMETHODOFCALCULATION.LIST", "GSTRECONPREFIXSUFFIXDETAILS.LIST",
-        "GSTCLASSFNIGSTRATES.LIST", "EXTARIFFDUTYHEADDETAILS.LIST", "TEMPGSTITEMSLABRATES.LIST",
-        "LEDGSTADDRESS.LIST", "VOUCHERTYPEPRODUCTCODES.LIST", "LEDADDRESS.LIST",
-        "DEFMULTIPLETOPHONENO.LIST"
-    ]
-    for tag in empty_lists:
-        etree.SubElement(ledger, tag)
+    # Hardcoded defaults from Tally XML are removed to prevent empty lists and elements
+    _sub(ledger, "ISBILLWISEON", "Yes")
+    _sub(ledger, "ISTDSAPPLICABLE", "Yes")
+    _sub(ledger, "ISCHEQUEPRINTINGENABLED", "Yes")
+    _sub(ledger, "AFFECTSSTOCK", "No")
 
     # GST registration block
     gstin = addr["gstin"] or tax_id or ""
     if gstin:
         gst_type = _gst_reg_type(addr["gst_category"])
         gst_list = etree.SubElement(ledger, "LEDGSTREGDETAILS.LIST")
-        _sub(gst_list, "APPLICABLEFROM", _tally_date(frappe.utils.today()))
+        _sub(gst_list, "APPLICABLEFROM", applicable_from)
         _sub(gst_list, "GSTREGISTRATIONTYPE", gst_type)
         if addr["state"]:
             _sub(gst_list, "PLACEOFSUPPLY", addr["state"])
@@ -403,7 +271,7 @@ def _add_party_ledger(tallymessage, party_name, parent_group, addr, tax_id):
     addr_list_el = etree.SubElement(mail_list, "ADDRESS.LIST", TYPE="String")
     for line in addr_lines:
         _sub(addr_list_el, "ADDRESS", line)
-    _sub(mail_list, "APPLICABLEFROM", _tally_date(frappe.utils.today()))
+    _sub(mail_list, "APPLICABLEFROM", applicable_from)
     if addr["pincode"]:
         _sub(mail_list, "PINCODE", addr["pincode"])
     _sub(mail_list, "MAILINGNAME", party_name)
@@ -426,7 +294,7 @@ def _add_party_ledger(tallymessage, party_name, parent_group, addr, tax_id):
     _sub(contact_details, "ISDEFAULTWHATSAPPNUM", "Yes")
 
 
-def generate_parties_xml(company=None):
+def generate_parties_xml(from_date=None, to_date=None, company=None):
     """Export Customers and Suppliers as Tally ledgers under Sundry Debtors/Creditors.
     Includes mailing address, state, country, pincode, GSTIN and GST registration type.
     """
@@ -434,6 +302,7 @@ def generate_parties_xml(company=None):
     company = company or frappe.defaults.get_user_default("Company")
     root, tallymessage = _envelope(company)
     count = 0
+    applicable_from = _get_applicable_from_date(from_date)
 
     customers = frappe.get_all(
         "Customer",
@@ -441,7 +310,7 @@ def generate_parties_xml(company=None):
     )
     for cust in customers:
         addr = _get_party_address("Customer", cust.name)
-        _add_party_ledger(tallymessage, cust.customer_name, settings.sundry_debtors_ledger or "Sundry Debtors", addr, cust.tax_id)
+        _add_party_ledger(tallymessage, cust.customer_name, settings.sundry_debtors_ledger or "Sundry Debtors", addr, cust.tax_id, applicable_from)
         count += 1
 
     suppliers = frappe.get_all(
@@ -450,7 +319,7 @@ def generate_parties_xml(company=None):
     )
     for sup in suppliers:
         addr = _get_party_address("Supplier", sup.name)
-        _add_party_ledger(tallymessage, sup.supplier_name, settings.sundry_creditors_ledger or "Sundry Creditors", addr, sup.tax_id)
+        _add_party_ledger(tallymessage, sup.supplier_name, settings.sundry_creditors_ledger or "Sundry Creditors", addr, sup.tax_id, applicable_from)
         count += 1
 
     return _to_xml_string(root), count
@@ -844,7 +713,7 @@ def generate_bank_transaction_xml(from_date=None, to_date=None, company=None):
 # Units of Measure (UOM)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def generate_uoms_xml(company=None):
+def generate_uoms_xml(from_date=None, to_date=None, company=None):
     """Export Units of Measure to Tally."""
     settings = _settings()
     company = company or frappe.defaults.get_user_default("Company")
@@ -868,11 +737,12 @@ def generate_uoms_xml(company=None):
 # Stock Items
 # ─────────────────────────────────────────────────────────────────────────────
 
-def generate_stock_groups_xml(company=None):
+def generate_stock_groups_xml(from_date=None, to_date=None, company=None):
     """Export Item Groups to Tally as Stock Groups."""
     settings = _settings()
     company = company or frappe.defaults.get_user_default("Company")
     root, tallymessage = _envelope(company)
+    applicable_from = _get_applicable_from_date(from_date)
 
     groups = frappe.get_all(
         "Item Group",
@@ -896,11 +766,11 @@ def generate_stock_groups_xml(company=None):
         
         # Default empty GST and HSN blocks for group, Tally will use 'As per Company' or let items override
         gst_list = etree.SubElement(stockgroup, "GSTDETAILS.LIST")
-        _sub(gst_list, "APPLICABLEFROM", _tally_date(frappe.utils.today()))
+        _sub(gst_list, "APPLICABLEFROM", applicable_from)
         _sub(gst_list, "SRCOFGSTDETAILS", "As per Company/Stock Group")
         
         hsn_list = etree.SubElement(stockgroup, "HSNDETAILS.LIST")
-        _sub(hsn_list, "APPLICABLEFROM", _tally_date(frappe.utils.today()))
+        _sub(hsn_list, "APPLICABLEFROM", applicable_from)
         _sub(hsn_list, "SRCOFHSNDETAILS", "As per Company/Stock Group")
         
         count += 1
@@ -908,11 +778,63 @@ def generate_stock_groups_xml(company=None):
     return _to_xml_string(root), count
 
 
-def generate_stock_items_xml(company=None):
+def _get_item_gst_rates(item_name, hsn_code):
+    """Attempt to fetch IGST, CGST, SGST, Cess rates for an Item."""
+    igst = cgst = sgst = cess = 0.0
+    
+    # 1. Try to fetch from GST HSN Code (India Compliance standard)
+    if hsn_code:
+        try:
+            hsn = frappe.get_doc("GST HSN Code", hsn_code)
+            if hasattr(hsn, "taxes") and hsn.taxes:
+                for tax in hsn.taxes:
+                    t_type = cstr(tax.get("tax_type")).upper()
+                    rate = flt(tax.tax_rate)
+                    if t_type == "IGST": igst = rate
+                    elif t_type == "CGST": cgst = rate
+                    elif t_type in ("SGST", "UTGST"): sgst = rate
+                    elif t_type == "CESS": cess = rate
+            # Fallback for older fields
+            if not igst and not cgst:
+                igst = flt(hsn.get("integrated_tax") or hsn.get("igst_rate") or hsn.get("igst"))
+                cgst = flt(hsn.get("central_tax") or hsn.get("cgst_rate") or hsn.get("cgst"))
+                sgst = flt(hsn.get("state_tax") or hsn.get("sgst_rate") or hsn.get("sgst"))
+                cess = flt(hsn.get("cess_amount") or hsn.get("cess_rate") or hsn.get("cess"))
+        except Exception:
+            pass
+
+    # 2. Fallback to Item Tax Template
+    if not igst and not cgst:
+        try:
+            item = frappe.get_doc("Item", item_name)
+            for t in item.get("taxes", []):
+                if t.item_tax_template:
+                    template = frappe.get_doc("Item Tax Template", t.item_tax_template)
+                    for tax in template.get("taxes", []):
+                        head = cstr(tax.get("tax_type") or tax.get("account_head") or "").lower()
+                        rate = flt(tax.tax_rate)
+                        if "igst" in head: igst = max(igst, rate)
+                        elif "cgst" in head: cgst = max(cgst, rate)
+                        elif "sgst" in head or "utgst" in head: sgst = max(sgst, rate)
+                        elif "cess" in head: cess = max(cess, rate)
+        except Exception:
+            pass
+
+    # Normalize rates
+    if igst and not cgst:
+        cgst = sgst = igst / 2.0
+    elif cgst and not igst:
+        igst = cgst + sgst
+        
+    return igst, cgst, sgst, cess
+
+
+def generate_stock_items_xml(from_date=None, to_date=None, company=None):
     """Export Stock Items to Tally with enhanced details like GST and HSN."""
     settings = _settings()
     company = company or frappe.defaults.get_user_default("Company")
     root, tallymessage = _envelope(company)
+    applicable_from = _get_applicable_from_date(from_date)
 
     # Fetching item fields including India compliance GST/HSN fields if they exist
     fields = ["name", "item_name", "item_group", "stock_uom", "description", "standard_rate", "is_stock_item", "has_batch_no", "valuation_method"]
@@ -950,13 +872,65 @@ def generate_stock_items_xml(company=None):
 
         # GST Details
         gst_list = etree.SubElement(stockitem, "GSTDETAILS.LIST")
-        _sub(gst_list, "APPLICABLEFROM", _tally_date(frappe.utils.today()))
-        _sub(gst_list, "SRCOFGSTDETAILS", "Specify Details Here" if item.get("gst_hsn_code") else "As per Company/Stock Group")
-        _sub(gst_list, "TAXABILITY", "Taxable")
+        _sub(gst_list, "APPLICABLEFROM", applicable_from)
+        
+        igst, cgst, sgst, cess = _get_item_gst_rates(item.name, item.get("gst_hsn_code"))
+        
+        if igst > 0 or cgst > 0:
+            _sub(gst_list, "TAXABILITY", "Taxable")
+            _sub(gst_list, "SRCOFGSTDETAILS", "Specify Details Here")
+            _sub(gst_list, "GSTCALCSLABONMRP", "No")
+            _sub(gst_list, "ISREVERSECHARGEAPPLICABLE", "No")
+            _sub(gst_list, "ISNONGSTGOODS", "No")
+            _sub(gst_list, "GSTINELIGIBLEITC", "No")
+            _sub(gst_list, "INCLUDEEXPFORSLABCALC", "No")
+            
+            state_wise = etree.SubElement(gst_list, "STATEWISEDETAILS.LIST")
+            # Using standard ' Any' which Tally accepts, bypassing the xml parser issue with &#4; 
+            _sub(state_wise, "STATENAME", " Any")
+            
+            # CGST
+            rate_cgst = etree.SubElement(state_wise, "RATEDETAILS.LIST")
+            _sub(rate_cgst, "GSTRATEDUTYHEAD", "CGST")
+            _sub(rate_cgst, "GSTRATEVALUATIONTYPE", "Based on Value")
+            _sub(rate_cgst, "GSTRATE", f" {cgst:g}")
+            
+            # SGST
+            rate_sgst = etree.SubElement(state_wise, "RATEDETAILS.LIST")
+            _sub(rate_sgst, "GSTRATEDUTYHEAD", "SGST/UTGST")
+            _sub(rate_sgst, "GSTRATEVALUATIONTYPE", "Based on Value")
+            _sub(rate_sgst, "GSTRATE", f" {sgst:g}")
+            
+            # IGST
+            rate_igst = etree.SubElement(state_wise, "RATEDETAILS.LIST")
+            _sub(rate_igst, "GSTRATEDUTYHEAD", "IGST")
+            _sub(rate_igst, "GSTRATEVALUATIONTYPE", "Based on Value")
+            _sub(rate_igst, "GSTRATE", f" {igst:g}")
+            
+            # Cess
+            rate_cess = etree.SubElement(state_wise, "RATEDETAILS.LIST")
+            _sub(rate_cess, "GSTRATEDUTYHEAD", "Cess")
+            if cess > 0:
+                _sub(rate_cess, "GSTRATEVALUATIONTYPE", "Based on Value")
+                _sub(rate_cess, "GSTRATE", f" {cess:g}")
+            else:
+                _sub(rate_cess, "GSTRATEVALUATIONTYPE", " Not Applicable")
+                
+            # State Cess
+            rate_scess = etree.SubElement(state_wise, "RATEDETAILS.LIST")
+            _sub(rate_scess, "GSTRATEDUTYHEAD", "State Cess")
+            _sub(rate_scess, "GSTRATEVALUATIONTYPE", "Based on Value")
+            
+            etree.SubElement(state_wise, "GSTSLABRATES.LIST")
+            etree.SubElement(gst_list, "TEMPGSTITEMSLABRATES.LIST")
+            etree.SubElement(gst_list, "TEMPGSTDETAILSLABRATES.LIST")
+        else:
+            _sub(gst_list, "TAXABILITY", "Taxable")
+            _sub(gst_list, "SRCOFGSTDETAILS", "As per Company/Stock Group")
         
         # HSN Details
         hsn_list = etree.SubElement(stockitem, "HSNDETAILS.LIST")
-        _sub(hsn_list, "APPLICABLEFROM", _tally_date(frappe.utils.today()))
+        _sub(hsn_list, "APPLICABLEFROM", applicable_from)
         hsn_code = item.get("gst_hsn_code")
         if hsn_code:
             _sub(hsn_list, "SRCOFHSNDETAILS", "Specify Details Here")
@@ -993,11 +967,11 @@ def generate_full_export_xml(from_date=None, to_date=None, company=None):
 
     total = 0
     generators = [
-        (settings.get("include_uoms", 1), generate_uoms_xml, {}),
-        (settings.get("include_stock_groups", 1), generate_stock_groups_xml, {}),
-        (settings.get("include_stock_items", 1), generate_stock_items_xml, {}),
-        (settings.include_chart_of_accounts, generate_chart_of_accounts_xml, {}),
-        (settings.include_parties, generate_parties_xml, {}),
+        (settings.get("include_uoms", 1), generate_uoms_xml, {"from_date": from_date, "to_date": to_date}),
+        (settings.get("include_stock_groups", 1), generate_stock_groups_xml, {"from_date": from_date, "to_date": to_date}),
+        (settings.get("include_stock_items", 1), generate_stock_items_xml, {"from_date": from_date, "to_date": to_date}),
+        (settings.include_chart_of_accounts, generate_chart_of_accounts_xml, {"from_date": from_date, "to_date": to_date}),
+        (settings.include_parties, generate_parties_xml, {"from_date": from_date, "to_date": to_date}),
         (settings.include_sales_invoice, generate_sales_invoice_xml,
          {"from_date": from_date, "to_date": to_date}),
         (settings.include_purchase_invoice, generate_purchase_invoice_xml,

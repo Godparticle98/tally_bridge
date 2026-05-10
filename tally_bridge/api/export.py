@@ -75,11 +75,11 @@ def test_tally_connection():
 # ─────────────────────────────────────────────────────────────────────────────
 
 @frappe.whitelist()
-def export_chart_of_accounts(push_to_tally_flag=False, company=None):
+def export_chart_of_accounts(from_date=None, to_date=None, push_to_tally_flag=False, company=None):
     company = company or frappe.defaults.get_user_default("Company")
-    log_name = _create_log("Chart of Accounts", "Tally XML")
+    log_name = _create_log("Chart of Accounts", "Tally XML", from_date, to_date)
     try:
-        xml_str, count = generate_chart_of_accounts_xml(company=company)
+        xml_str, count = generate_chart_of_accounts_xml(from_date, to_date, company=company)
         _finalize_log(log_name, count, 0, xml_str)
 
         if frappe.parse_json(push_to_tally_flag):
@@ -94,11 +94,11 @@ def export_chart_of_accounts(push_to_tally_flag=False, company=None):
 
 
 @frappe.whitelist()
-def export_parties(push_to_tally_flag=False, company=None):
+def export_parties(from_date=None, to_date=None, push_to_tally_flag=False, company=None):
     company = company or frappe.defaults.get_user_default("Company")
-    log_name = _create_log("Parties", "Tally XML")
+    log_name = _create_log("Parties", "Tally XML", from_date, to_date)
     try:
-        xml_str, count = generate_parties_xml(company=company)
+        xml_str, count = generate_parties_xml(from_date, to_date, company=company)
         _finalize_log(log_name, count, 0, xml_str)
 
         if frappe.parse_json(push_to_tally_flag):
@@ -113,11 +113,11 @@ def export_parties(push_to_tally_flag=False, company=None):
 
 
 @frappe.whitelist()
-def export_uoms(push_to_tally_flag=False, company=None):
+def export_uoms(from_date=None, to_date=None, push_to_tally_flag=False, company=None):
     company = company or frappe.defaults.get_user_default("Company")
-    log_name = _create_log("UOMs", "Tally XML")
+    log_name = _create_log("UOMs", "Tally XML", from_date, to_date)
     try:
-        xml_str, count = generate_uoms_xml(company=company)
+        xml_str, count = generate_uoms_xml(from_date, to_date, company=company)
         _finalize_log(log_name, count, 0, xml_str)
 
         if frappe.parse_json(push_to_tally_flag):
@@ -132,11 +132,11 @@ def export_uoms(push_to_tally_flag=False, company=None):
 
 
 @frappe.whitelist()
-def export_stock_items(push_to_tally_flag=False, company=None):
+def export_stock_items(from_date=None, to_date=None, push_to_tally_flag=False, company=None):
     company = company or frappe.defaults.get_user_default("Company")
-    log_name = _create_log("Stock Items", "Tally XML")
+    log_name = _create_log("Stock Items", "Tally XML", from_date, to_date)
     try:
-        xml_str, count = generate_stock_items_xml(company=company)
+        xml_str, count = generate_stock_items_xml(from_date, to_date, company=company)
         _finalize_log(log_name, count, 0, xml_str)
 
         if frappe.parse_json(push_to_tally_flag):
