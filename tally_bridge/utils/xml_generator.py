@@ -363,8 +363,27 @@ def generate_sales_invoice_xml(from_date=None, to_date=None, company=None):
         _sub(voucher, "VOUCHERTYPENAME", settings.sales_voucher_type or "Sales")
         _sub(voucher, "VOUCHERNUMBER", inv.name)
         _sub(voucher, "PARTYLEDGERNAME", inv.customer_name)
+        _sub(voucher, "PARTYNAME", inv.customer_name)
+        _sub(voucher, "BASICBUYERNAME", inv.customer_name)
         _sub(voucher, "NARRATION", cstr(inv.remarks or f"Sales Invoice {inv.name}"))
         _sub(voucher, "ISINVOICE", "Yes")
+
+        # Party details for Voucher
+        addr = _get_party_address("Customer", inv.customer)
+        if addr["country"]:
+            _sub(voucher, "COUNTRYOFRESIDENCE", addr["country"])
+        if addr["state"]:
+            _sub(voucher, "STATENAME", addr["state"])
+            _sub(voucher, "PLACEOFSUPPLY", addr["state"])
+        if addr["gstin"]:
+            _sub(voucher, "PARTYGSTIN", addr["gstin"])
+            _sub(voucher, "PARTYTAXREGISTRATIONTYPE", _gst_reg_type(addr["gst_category"]))
+        
+        addr_lines = _build_address_lines(addr)
+        if addr_lines:
+            buyer_addr_list = etree.SubElement(voucher, "BASICBUYERADDRESS.LIST", TYPE="String")
+            for line in addr_lines:
+                _sub(buyer_addr_list, "BASICBUYERADDRESS", line)
 
         # Inventory entries (Items)
         for item in doc.items:
@@ -386,6 +405,10 @@ def generate_sales_invoice_xml(from_date=None, to_date=None, company=None):
             _sub(accounting_alloc, "LEDGERNAME", ledger_name)
             _sub(accounting_alloc, "ISDEEMEDPOSITIVE", "No")   # Credit → No
             _sub(accounting_alloc, "AMOUNT", _amount(item.base_amount))  # Positive credit amount
+            
+            # Append item GST details dynamically based on item code to map in voucher directly
+            hsn_code = getattr(item, "gst_hsn_code", None)
+            _add_item_gst_and_hsn_details(inventory_entry, item.item_code, tally_dt, hsn_code)
 
         # Ledger entries section
         # Party entry (Debit)
@@ -454,8 +477,26 @@ def generate_purchase_invoice_xml(from_date=None, to_date=None, company=None):
         _sub(voucher, "VOUCHERTYPENAME", settings.purchase_voucher_type or "Purchase")
         _sub(voucher, "VOUCHERNUMBER", inv.bill_no or inv.name)
         _sub(voucher, "PARTYLEDGERNAME", inv.supplier_name)
+        _sub(voucher, "PARTYNAME", inv.supplier_name)
         _sub(voucher, "NARRATION", cstr(inv.remarks or f"Purchase Invoice {inv.name}"))
         _sub(voucher, "ISINVOICE", "Yes")
+
+        # Party details for Voucher
+        addr = _get_party_address("Supplier", inv.supplier)
+        if addr["country"]:
+            _sub(voucher, "COUNTRYOFRESIDENCE", addr["country"])
+        if addr["state"]:
+            _sub(voucher, "STATENAME", addr["state"])
+            _sub(voucher, "PLACEOFSUPPLY", addr["state"])
+        if addr["gstin"]:
+            _sub(voucher, "PARTYGSTIN", addr["gstin"])
+            _sub(voucher, "PARTYTAXREGISTRATIONTYPE", _gst_reg_type(addr["gst_category"]))
+        
+        addr_lines = _build_address_lines(addr)
+        if addr_lines:
+            addr_list = etree.SubElement(voucher, "ADDRESS.LIST", TYPE="String")
+            for line in addr_lines:
+                _sub(addr_list, "ADDRESS", line)
 
         # Inventory entries (Items)
         for item in doc.items:
@@ -829,6 +870,74 @@ def _get_item_gst_rates(item_name, hsn_code):
     return igst, cgst, sgst, cess
 
 
+def _add_item_gst_and_hsn_details(parent_element, item_code, applicable_from, hsn_code=None):
+    if not hsn_code:
+        try:
+            item_doc = frappe.get_doc("Item", item_code)
+            hsn_code = item_doc.get("gst_hsn_code")
+        except Exception:
+            pass
+
+    gst_list = etree.SubElement(parent_element, "GSTDETAILS.LIST")
+    _sub(gst_list, "APPLICABLEFROM", applicable_from)
+    
+    igst, cgst, sgst, cess = _get_item_gst_rates(item_code, hsn_code)
+    
+    if igst > 0 or cgst > 0:
+        _sub(gst_list, "TAXABILITY", "Taxable")
+        _sub(gst_list, "SRCOFGSTDETAILS", "Specify Details Here")
+        _sub(gst_list, "GSTCALCSLABONMRP", "No")
+        _sub(gst_list, "ISREVERSECHARGEAPPLICABLE", "No")
+        _sub(gst_list, "ISNONGSTGOODS", "No")
+        _sub(gst_list, "GSTINELIGIBLEITC", "No")
+        _sub(gst_list, "INCLUDEEXPFORSLABCALC", "No")
+        
+        state_wise = etree.SubElement(gst_list, "STATEWISEDETAILS.LIST")
+        _sub(state_wise, "STATENAME", " Any")
+        
+        rate_cgst = etree.SubElement(state_wise, "RATEDETAILS.LIST")
+        _sub(rate_cgst, "GSTRATEDUTYHEAD", "CGST")
+        _sub(rate_cgst, "GSTRATEVALUATIONTYPE", "Based on Value")
+        _sub(rate_cgst, "GSTRATE", f" {cgst:g}")
+        
+        rate_sgst = etree.SubElement(state_wise, "RATEDETAILS.LIST")
+        _sub(rate_sgst, "GSTRATEDUTYHEAD", "SGST/UTGST")
+        _sub(rate_sgst, "GSTRATEVALUATIONTYPE", "Based on Value")
+        _sub(rate_sgst, "GSTRATE", f" {sgst:g}")
+        
+        rate_igst = etree.SubElement(state_wise, "RATEDETAILS.LIST")
+        _sub(rate_igst, "GSTRATEDUTYHEAD", "IGST")
+        _sub(rate_igst, "GSTRATEVALUATIONTYPE", "Based on Value")
+        _sub(rate_igst, "GSTRATE", f" {igst:g}")
+        
+        rate_cess = etree.SubElement(state_wise, "RATEDETAILS.LIST")
+        _sub(rate_cess, "GSTRATEDUTYHEAD", "Cess")
+        if cess > 0:
+            _sub(rate_cess, "GSTRATEVALUATIONTYPE", "Based on Value")
+            _sub(rate_cess, "GSTRATE", f" {cess:g}")
+        else:
+            _sub(rate_cess, "GSTRATEVALUATIONTYPE", " Not Applicable")
+            
+        rate_scess = etree.SubElement(state_wise, "RATEDETAILS.LIST")
+        _sub(rate_scess, "GSTRATEDUTYHEAD", "State Cess")
+        _sub(rate_scess, "GSTRATEVALUATIONTYPE", "Based on Value")
+        
+        etree.SubElement(state_wise, "GSTSLABRATES.LIST")
+        etree.SubElement(gst_list, "TEMPGSTITEMSLABRATES.LIST")
+        etree.SubElement(gst_list, "TEMPGSTDETAILSLABRATES.LIST")
+    else:
+        _sub(gst_list, "TAXABILITY", "Taxable")
+        _sub(gst_list, "SRCOFGSTDETAILS", "As per Company/Stock Group")
+        
+    hsn_list = etree.SubElement(parent_element, "HSNDETAILS.LIST")
+    _sub(hsn_list, "APPLICABLEFROM", applicable_from)
+    if hsn_code:
+        _sub(hsn_list, "SRCOFHSNDETAILS", "Specify Details Here")
+        _sub(hsn_list, "HSNCODE", cstr(hsn_code))
+    else:
+        _sub(hsn_list, "SRCOFHSNDETAILS", "As per Company/Stock Group")
+
+
 def generate_stock_items_xml(from_date=None, to_date=None, company=None):
     """Export Stock Items to Tally with enhanced details like GST and HSN."""
     settings = _settings()
@@ -870,73 +979,8 @@ def generate_stock_items_xml(from_date=None, to_date=None, company=None):
         _sub(stockitem, "VALUATIONMETHOD", "Avg. Price")
         _sub(stockitem, "ISDELETED", "No")
 
-        # GST Details
-        gst_list = etree.SubElement(stockitem, "GSTDETAILS.LIST")
-        _sub(gst_list, "APPLICABLEFROM", applicable_from)
-        
-        igst, cgst, sgst, cess = _get_item_gst_rates(item.name, item.get("gst_hsn_code"))
-        
-        if igst > 0 or cgst > 0:
-            _sub(gst_list, "TAXABILITY", "Taxable")
-            _sub(gst_list, "SRCOFGSTDETAILS", "Specify Details Here")
-            _sub(gst_list, "GSTCALCSLABONMRP", "No")
-            _sub(gst_list, "ISREVERSECHARGEAPPLICABLE", "No")
-            _sub(gst_list, "ISNONGSTGOODS", "No")
-            _sub(gst_list, "GSTINELIGIBLEITC", "No")
-            _sub(gst_list, "INCLUDEEXPFORSLABCALC", "No")
-            
-            state_wise = etree.SubElement(gst_list, "STATEWISEDETAILS.LIST")
-            # Using standard ' Any' which Tally accepts, bypassing the xml parser issue with &#4; 
-            _sub(state_wise, "STATENAME", " Any")
-            
-            # CGST
-            rate_cgst = etree.SubElement(state_wise, "RATEDETAILS.LIST")
-            _sub(rate_cgst, "GSTRATEDUTYHEAD", "CGST")
-            _sub(rate_cgst, "GSTRATEVALUATIONTYPE", "Based on Value")
-            _sub(rate_cgst, "GSTRATE", f" {cgst:g}")
-            
-            # SGST
-            rate_sgst = etree.SubElement(state_wise, "RATEDETAILS.LIST")
-            _sub(rate_sgst, "GSTRATEDUTYHEAD", "SGST/UTGST")
-            _sub(rate_sgst, "GSTRATEVALUATIONTYPE", "Based on Value")
-            _sub(rate_sgst, "GSTRATE", f" {sgst:g}")
-            
-            # IGST
-            rate_igst = etree.SubElement(state_wise, "RATEDETAILS.LIST")
-            _sub(rate_igst, "GSTRATEDUTYHEAD", "IGST")
-            _sub(rate_igst, "GSTRATEVALUATIONTYPE", "Based on Value")
-            _sub(rate_igst, "GSTRATE", f" {igst:g}")
-            
-            # Cess
-            rate_cess = etree.SubElement(state_wise, "RATEDETAILS.LIST")
-            _sub(rate_cess, "GSTRATEDUTYHEAD", "Cess")
-            if cess > 0:
-                _sub(rate_cess, "GSTRATEVALUATIONTYPE", "Based on Value")
-                _sub(rate_cess, "GSTRATE", f" {cess:g}")
-            else:
-                _sub(rate_cess, "GSTRATEVALUATIONTYPE", " Not Applicable")
-                
-            # State Cess
-            rate_scess = etree.SubElement(state_wise, "RATEDETAILS.LIST")
-            _sub(rate_scess, "GSTRATEDUTYHEAD", "State Cess")
-            _sub(rate_scess, "GSTRATEVALUATIONTYPE", "Based on Value")
-            
-            etree.SubElement(state_wise, "GSTSLABRATES.LIST")
-            etree.SubElement(gst_list, "TEMPGSTITEMSLABRATES.LIST")
-            etree.SubElement(gst_list, "TEMPGSTDETAILSLABRATES.LIST")
-        else:
-            _sub(gst_list, "TAXABILITY", "Taxable")
-            _sub(gst_list, "SRCOFGSTDETAILS", "As per Company/Stock Group")
-        
-        # HSN Details
-        hsn_list = etree.SubElement(stockitem, "HSNDETAILS.LIST")
-        _sub(hsn_list, "APPLICABLEFROM", applicable_from)
-        hsn_code = item.get("gst_hsn_code")
-        if hsn_code:
-            _sub(hsn_list, "SRCOFHSNDETAILS", "Specify Details Here")
-            _sub(hsn_list, "HSNCODE", cstr(hsn_code))
-        else:
-            _sub(hsn_list, "SRCOFHSNDETAILS", "As per Company/Stock Group")
+        # GST and HSN Details
+        _add_item_gst_and_hsn_details(stockitem, item.name, applicable_from, item.get("gst_hsn_code"))
             
         count += 1
 
