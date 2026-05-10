@@ -365,6 +365,7 @@ def generate_sales_invoice_xml(from_date=None, to_date=None, company=None):
         _sub(voucher, "PARTYLEDGERNAME", inv.customer_name)
         _sub(voucher, "PARTYNAME", inv.customer_name)
         _sub(voucher, "BASICBUYERNAME", inv.customer_name)
+        _sub(voucher, "PARTYMAILINGNAME", inv.customer_name)
         _sub(voucher, "NARRATION", cstr(inv.remarks or f"Sales Invoice {inv.name}"))
         _sub(voucher, "ISINVOICE", "Yes")
 
@@ -374,16 +375,24 @@ def generate_sales_invoice_xml(from_date=None, to_date=None, company=None):
             _sub(voucher, "COUNTRYOFRESIDENCE", addr["country"])
         if addr["state"]:
             _sub(voucher, "STATENAME", addr["state"])
+            _sub(voucher, "CONSIGNEESTATENAME", addr["state"])
             _sub(voucher, "PLACEOFSUPPLY", addr["state"])
         if addr["gstin"]:
             _sub(voucher, "PARTYGSTIN", addr["gstin"])
+            _sub(voucher, "CONSIGNEEGSTIN", addr["gstin"])
             _sub(voucher, "PARTYTAXREGISTRATIONTYPE", _gst_reg_type(addr["gst_category"]))
+            _sub(voucher, "CONSIGNEEGSTREGISTRATIONTYPE", _gst_reg_type(addr["gst_category"]))
         
         addr_lines = _build_address_lines(addr)
         if addr_lines:
+            # Ship To (Consignee)
             buyer_addr_list = etree.SubElement(voucher, "BASICBUYERADDRESS.LIST", TYPE="String")
             for line in addr_lines:
                 _sub(buyer_addr_list, "BASICBUYERADDRESS", line)
+            # Bill To (Buyer)
+            addr_list = etree.SubElement(voucher, "ADDRESS.LIST", TYPE="String")
+            for line in addr_lines:
+                _sub(addr_list, "ADDRESS", line)
 
         # Inventory entries (Items)
         for item in doc.items:
@@ -478,6 +487,8 @@ def generate_purchase_invoice_xml(from_date=None, to_date=None, company=None):
         _sub(voucher, "VOUCHERNUMBER", inv.bill_no or inv.name)
         _sub(voucher, "PARTYLEDGERNAME", inv.supplier_name)
         _sub(voucher, "PARTYNAME", inv.supplier_name)
+        _sub(voucher, "BASICBUYERNAME", inv.supplier_name)
+        _sub(voucher, "PARTYMAILINGNAME", inv.supplier_name)
         _sub(voucher, "NARRATION", cstr(inv.remarks or f"Purchase Invoice {inv.name}"))
         _sub(voucher, "ISINVOICE", "Yes")
 
@@ -487,13 +498,21 @@ def generate_purchase_invoice_xml(from_date=None, to_date=None, company=None):
             _sub(voucher, "COUNTRYOFRESIDENCE", addr["country"])
         if addr["state"]:
             _sub(voucher, "STATENAME", addr["state"])
+            _sub(voucher, "CONSIGNEESTATENAME", addr["state"])
             _sub(voucher, "PLACEOFSUPPLY", addr["state"])
         if addr["gstin"]:
             _sub(voucher, "PARTYGSTIN", addr["gstin"])
+            _sub(voucher, "CONSIGNEEGSTIN", addr["gstin"])
             _sub(voucher, "PARTYTAXREGISTRATIONTYPE", _gst_reg_type(addr["gst_category"]))
+            _sub(voucher, "CONSIGNEEGSTREGISTRATIONTYPE", _gst_reg_type(addr["gst_category"]))
         
         addr_lines = _build_address_lines(addr)
         if addr_lines:
+            # Ship To (Consignee)
+            buyer_addr_list = etree.SubElement(voucher, "BASICBUYERADDRESS.LIST", TYPE="String")
+            for line in addr_lines:
+                _sub(buyer_addr_list, "BASICBUYERADDRESS", line)
+            # Bill To (Buyer)
             addr_list = etree.SubElement(voucher, "ADDRESS.LIST", TYPE="String")
             for line in addr_lines:
                 _sub(addr_list, "ADDRESS", line)
@@ -932,8 +951,8 @@ def _add_item_gst_and_hsn_details(parent_element, item_code, applicable_from, hs
     hsn_list = etree.SubElement(parent_element, "HSNDETAILS.LIST")
     _sub(hsn_list, "APPLICABLEFROM", applicable_from)
     if hsn_code:
-        _sub(hsn_list, "SRCOFHSNDETAILS", "Specify Details Here")
         _sub(hsn_list, "HSNCODE", cstr(hsn_code))
+        _sub(hsn_list, "SRCOFHSNDETAILS", "Specify Details Here")
     else:
         _sub(hsn_list, "SRCOFHSNDETAILS", "As per Company/Stock Group")
 
