@@ -534,6 +534,10 @@ def generate_purchase_invoice_xml(from_date=None, to_date=None, company=None):
             _sub(accounting_alloc, "LEDGERNAME", ledger_name)
             _sub(accounting_alloc, "ISDEEMEDPOSITIVE", "Yes")
             _sub(accounting_alloc, "AMOUNT", f"-{_amount(item.base_amount)}")
+            
+            # Append item GST details dynamically based on item code to map in voucher directly
+            hsn_code = getattr(item, "gst_hsn_code", None)
+            _add_item_gst_and_hsn_details(inventory_entry, item.item_code, tally_dt, hsn_code)
 
         # Party (Credit)
         party_entry = etree.SubElement(voucher, "LEDGERENTRIES.LIST")
