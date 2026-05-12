@@ -414,10 +414,6 @@ def generate_sales_invoice_xml(from_date=None, to_date=None, company=None):
             _sub(accounting_alloc, "LEDGERNAME", ledger_name)
             _sub(accounting_alloc, "ISDEEMEDPOSITIVE", "No")   # Credit → No
             _sub(accounting_alloc, "AMOUNT", _amount(item.base_amount))  # Positive credit amount
-            
-            # Append item GST details dynamically based on item code to map in voucher directly
-            hsn_code = getattr(item, "gst_hsn_code", None)
-            _add_item_gst_and_hsn_details(inventory_entry, item.item_code, tally_dt, hsn_code)
 
         # Ledger entries section
         # Party entry (Debit)
@@ -530,14 +526,10 @@ def generate_purchase_invoice_xml(from_date=None, to_date=None, company=None):
             
             # Accounting Allocation for the Purchase Ledger
             accounting_alloc = etree.SubElement(inventory_entry, "ACCOUNTINGALLOCATIONS.LIST")
-            ledger_name = _strip_company(item.expense_account) if item.expense_account else "Purchase"
+            ledger_name = "Purchase"
             _sub(accounting_alloc, "LEDGERNAME", ledger_name)
             _sub(accounting_alloc, "ISDEEMEDPOSITIVE", "Yes")
             _sub(accounting_alloc, "AMOUNT", f"-{_amount(item.base_amount)}")
-            
-            # Append item GST details dynamically based on item code to map in voucher directly
-            hsn_code = getattr(item, "gst_hsn_code", None)
-            _add_item_gst_and_hsn_details(inventory_entry, item.item_code, tally_dt, hsn_code)
 
         # Party (Credit)
         party_entry = etree.SubElement(voucher, "LEDGERENTRIES.LIST")
