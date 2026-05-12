@@ -171,6 +171,24 @@
       "default": "Journal"
     },
     {
+      "fieldname": "sales_ledger",
+      "fieldtype": "Data",
+      "label": "Sales Ledger",
+      "default": "Sales"
+    },
+    {
+      "fieldname": "purchase_ledger",
+      "fieldtype": "Data",
+      "label": "Purchase Ledger",
+      "default": "Purchase"
+    },
+    {
+      "fieldname": "tds_deductible_ledger",
+      "fieldtype": "Data",
+      "label": "TDS Deductible Ledger",
+      "default": "TDS-Deductible"
+    },
+    {
       "fieldname": "cb3",
       "fieldtype": "Column Break"
     },

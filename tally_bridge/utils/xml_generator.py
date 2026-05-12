@@ -335,11 +335,12 @@ def generate_sales_invoice_xml(from_date=None, to_date=None, company=None):
     root, tallymessage = _voucher_envelope(company, "Vouchers")
 
     filters = {"docstatus": 1, "company": company}
-    if from_date:
-        filters["posting_date"] = [">=", from_date]
-    if to_date:
-        filters.setdefault("posting_date", [">=", from_date])
+    if from_date and to_date:
         filters["posting_date"] = ["between", [from_date, to_date]]
+    elif from_date:
+        filters["posting_date"] = [">=", from_date]
+    elif to_date:
+        filters["posting_date"] = ["<=", to_date]
 
     invoices = frappe.get_all(
         "Sales Invoice",
@@ -426,7 +427,10 @@ def generate_sales_invoice_xml(from_date=None, to_date=None, company=None):
         for tax in doc.taxes:
             if flt(tax.tax_amount) != 0:
                 tax_entry = etree.SubElement(voucher, "LEDGERENTRIES.LIST")
-                _sub(tax_entry, "LEDGERNAME", _strip_company(tax.account_head))
+                ledger_name = _strip_company(tax.account_head)
+                if "TDS" in ledger_name.upper():
+                    ledger_name = settings.tds_deductible_ledger or "TDS-Deductible"
+                _sub(tax_entry, "LEDGERNAME", ledger_name)
                 
                 # In ERPNext: base_tax_amount_after_discount_amount holds the actual tax value added/deducted.
                 # If negative, it's a deduction (Debit -> ISDEEMEDPOSITIVE=Yes, Amount=-ve)
@@ -435,9 +439,11 @@ def generate_sales_invoice_xml(from_date=None, to_date=None, company=None):
                 if not tax_val:
                     tax_val = flt(tax.base_tax_amount)
                 
-                is_debit = tax_val < 0
+                is_deduction = tax.get("add_deduct_tax") == "Deduct" or tax_val < 0 or "TDS" in ledger_name.upper()
+                is_debit = is_deduction
+                
                 _sub(tax_entry, "ISDEEMEDPOSITIVE", "Yes" if is_debit else "No")
-                _sub(tax_entry, "AMOUNT", f"-{_amount(abs(tax_val))}" if is_debit else _amount(tax_val))
+                _sub(tax_entry, "AMOUNT", f"-{_amount(abs(tax_val))}" if is_debit else _amount(abs(tax_val)))
 
         count += 1
 
@@ -458,6 +464,8 @@ def generate_purchase_invoice_xml(from_date=None, to_date=None, company=None):
         filters["posting_date"] = ["between", [from_date, to_date]]
     elif from_date:
         filters["posting_date"] = [">=", from_date]
+    elif to_date:
+        filters["posting_date"] = ["<=", to_date]
 
     invoices = frappe.get_all(
         "Purchase Invoice",
@@ -526,7 +534,7 @@ def generate_purchase_invoice_xml(from_date=None, to_date=None, company=None):
             
             # Accounting Allocation for the Purchase Ledger
             accounting_alloc = etree.SubElement(inventory_entry, "ACCOUNTINGALLOCATIONS.LIST")
-            ledger_name = "Purchase"
+            ledger_name = _strip_company(item.expense_account) if item.expense_account else (settings.purchase_ledger or "Purchase")
             _sub(accounting_alloc, "LEDGERNAME", ledger_name)
             _sub(accounting_alloc, "ISDEEMEDPOSITIVE", "Yes")
             _sub(accounting_alloc, "AMOUNT", f"-{_amount(item.base_amount)}")
@@ -541,16 +549,21 @@ def generate_purchase_invoice_xml(from_date=None, to_date=None, company=None):
         for tax in doc.taxes:
             if flt(tax.tax_amount) != 0:
                 tax_entry = etree.SubElement(voucher, "LEDGERENTRIES.LIST")
-                _sub(tax_entry, "LEDGERNAME", _strip_company(tax.account_head))
+                ledger_name = _strip_company(tax.account_head)
+                if "TDS" in ledger_name.upper():
+                    ledger_name = settings.tds_deductible_ledger or "TDS-Deductible"
+                _sub(tax_entry, "LEDGERNAME", ledger_name)
                 
                 # In Purchase, tax is typically a Debit (addition to cost/input credit) -> ISDEEMEDPOSITIVE=Yes
                 tax_val = flt(tax.base_tax_amount_after_discount_amount)
                 if not tax_val:
                     tax_val = flt(tax.base_tax_amount)
                 
-                is_credit = tax_val < 0 # deduction from purchase total is a Credit
+                is_deduction = tax.get("add_deduct_tax") == "Deduct" or tax_val < 0 or "TDS" in ledger_name.upper()
+                is_credit = is_deduction # deduction from purchase total is a Credit
+                
                 _sub(tax_entry, "ISDEEMEDPOSITIVE", "No" if is_credit else "Yes")
-                _sub(tax_entry, "AMOUNT", _amount(abs(tax_val)) if is_credit else f"-{_amount(tax_val)}")
+                _sub(tax_entry, "AMOUNT", _amount(abs(tax_val)) if is_credit else f"-{_amount(abs(tax_val))}")
 
         count += 1
 
@@ -571,6 +584,8 @@ def generate_payment_entry_xml(from_date=None, to_date=None, company=None):
         filters["posting_date"] = ["between", [from_date, to_date]]
     elif from_date:
         filters["posting_date"] = [">=", from_date]
+    elif to_date:
+        filters["posting_date"] = ["<=", to_date]
 
     payments = frappe.get_all(
         "Payment Entry",
@@ -653,6 +668,8 @@ def generate_journal_entry_xml(from_date=None, to_date=None, company=None):
         filters["posting_date"] = ["between", [from_date, to_date]]
     elif from_date:
         filters["posting_date"] = [">=", from_date]
+    elif to_date:
+        filters["posting_date"] = ["<=", to_date]
 
     journals = frappe.get_all(
         "Journal Entry",
@@ -707,6 +724,8 @@ def generate_bank_transaction_xml(from_date=None, to_date=None, company=None):
         filters["date"] = ["between", [from_date, to_date]]
     elif from_date:
         filters["date"] = [">=", from_date]
+    elif to_date:
+        filters["date"] = ["<=", to_date]
 
     transactions = frappe.get_all(
         "Bank Transaction",
