@@ -857,18 +857,31 @@ def _get_item_gst_rates(item_name, hsn_code):
     """Attempt to fetch IGST, CGST, SGST, Cess rates for an Item."""
     igst = cgst = sgst = cess = 0.0
     
+    def _parse_taxes(taxes_list):
+        _i = _c = _s = _ce = 0.0
+        for tax in taxes_list:
+            head = cstr(tax.get("tax_type") or tax.get("account_head") or tax.get("item_tax_template") or "").lower()
+            rate = flt(tax.get("tax_rate") or tax.get("rate") or 0.0)
+            if not rate:
+                continue
+            if "igst" in head or "integrated" in head: _i = max(_i, rate)
+            elif "cgst" in head or "central" in head: _c = max(_c, rate)
+            elif "sgst" in head or "utgst" in head or "state" in head: _s = max(_s, rate)
+            elif "cess" in head: _ce = max(_ce, rate)
+        return _i, _c, _s, _ce
+
     # 1. Try to fetch from GST HSN Code (India Compliance standard)
     if hsn_code:
         try:
             hsn = frappe.get_doc("GST HSN Code", hsn_code)
             if hasattr(hsn, "taxes") and hsn.taxes:
-                for tax in hsn.taxes:
-                    t_type = cstr(tax.get("tax_type")).upper()
-                    rate = flt(tax.tax_rate)
-                    if t_type == "IGST": igst = rate
-                    elif t_type == "CGST": cgst = rate
-                    elif t_type in ("SGST", "UTGST"): sgst = rate
-                    elif t_type == "CESS": cess = rate
+                igst, cgst, sgst, cess = _parse_taxes(hsn.taxes)
+            
+            # If HSN links to an item tax template directly
+            if not igst and not cgst and hsn.get("item_tax_template"):
+                template = frappe.get_doc("Item Tax Template", hsn.get("item_tax_template"))
+                igst, cgst, sgst, cess = _parse_taxes(template.get("taxes", []))
+                
             # Fallback for older fields
             if not igst and not cgst:
                 igst = flt(hsn.get("integrated_tax") or hsn.get("igst_rate") or hsn.get("igst"))
@@ -878,20 +891,38 @@ def _get_item_gst_rates(item_name, hsn_code):
         except Exception:
             pass
 
-    # 2. Fallback to Item Tax Template
+    # 2. Try Item Tax Template directly linked to Item
     if not igst and not cgst:
         try:
             item = frappe.get_doc("Item", item_name)
-            for t in item.get("taxes", []):
-                if t.item_tax_template:
-                    template = frappe.get_doc("Item Tax Template", t.item_tax_template)
-                    for tax in template.get("taxes", []):
-                        head = cstr(tax.get("tax_type") or tax.get("account_head") or "").lower()
-                        rate = flt(tax.tax_rate)
-                        if "igst" in head: igst = max(igst, rate)
-                        elif "cgst" in head: cgst = max(cgst, rate)
-                        elif "sgst" in head or "utgst" in head: sgst = max(sgst, rate)
-                        elif "cess" in head: cess = max(cess, rate)
+            
+            # Common custom fields for gst rate
+            rate = flt(item.get("gst_rate") or item.get("custom_gst_rate") or item.get("tax_rate"))
+            if rate:
+                igst = rate
+                
+            if not igst and not cgst:
+                for t in item.get("taxes", []):
+                    if t.item_tax_template:
+                        template = frappe.get_doc("Item Tax Template", t.item_tax_template)
+                        _i, _c, _s, _ce = _parse_taxes(template.get("taxes", []))
+                        igst = max(igst, _i); cgst = max(cgst, _c); sgst = max(sgst, _s); cess = max(cess, _ce)
+            
+            # 3. Fallback: try Item Group
+            if not igst and not cgst and item.item_group:
+                ig_doc = frappe.get_doc("Item Group", item.item_group)
+                
+                # Check custom fields on item group
+                rate = flt(ig_doc.get("gst_rate") or ig_doc.get("custom_gst_rate") or ig_doc.get("tax_rate"))
+                if rate:
+                    igst = rate
+                
+                if not igst and not cgst:
+                    for t in ig_doc.get("taxes", []):
+                        if t.item_tax_template:
+                            template = frappe.get_doc("Item Tax Template", t.item_tax_template)
+                            _i, _c, _s, _ce = _parse_taxes(template.get("taxes", []))
+                            igst = max(igst, _i); cgst = max(cgst, _c); sgst = max(sgst, _s); cess = max(cess, _ce)
         except Exception:
             pass
 

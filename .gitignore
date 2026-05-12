@@ -7,3 +7,4 @@ check_db.py
 check_doctype.py
 check_modules.py
 force_sync.py
+check_item_taxes.py
