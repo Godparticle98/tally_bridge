@@ -403,18 +403,16 @@ def generate_sales_invoice_xml(from_date=None, to_date=None, company=None):
 
             _sub(inventory_entry, "RATE", f"{_amount(item.rate)}/{item.uom}")
             # Sales: item amount is a CREDIT in the income account → positive value
-            _sub(inventory_entry, "AMOUNT", _amount(item.base_amount))
+            _sub(inventory_entry, "AMOUNT", _amount(item.base_net_amount))
             _sub(inventory_entry, "ACTUALQTY", f" {item.qty} {item.uom}")
             _sub(inventory_entry, "BILLEDQTY", f" {item.qty} {item.uom}")
 
-            # Accounting Allocation — REQUIRED by Tally for ISINVOICE=Yes vouchers.
-            # Each inventory entry must have at least one ACCOUNTINGALLOCATIONS.LIST child.
-            # The income ledger is CREDITED (ISDEEMEDPOSITIVE=No) with a positive amount.
+            # Accounting Allocation for the Sales Ledger
             accounting_alloc = etree.SubElement(inventory_entry, "ACCOUNTINGALLOCATIONS.LIST")
-            ledger_name = _strip_company(item.income_account) if item.income_account else (settings.sales_ledger or "Sales")
+            ledger_name = settings.sales_ledger or "Sales"
             _sub(accounting_alloc, "LEDGERNAME", ledger_name)
             _sub(accounting_alloc, "ISDEEMEDPOSITIVE", "No")   # Credit → No
-            _sub(accounting_alloc, "AMOUNT", _amount(item.base_amount))  # Positive credit amount
+            _sub(accounting_alloc, "AMOUNT", _amount(item.base_net_amount))  # Positive credit amount
 
         # Ledger entries section
         # Party entry (Debit)
@@ -528,16 +526,16 @@ def generate_purchase_invoice_xml(from_date=None, to_date=None, company=None):
             _sub(inventory_entry, "ISDEEMEDPOSITIVE", "Yes") # Inward is Yes
             
             _sub(inventory_entry, "RATE", f"{_amount(item.rate)}/{item.uom}")
-            _sub(inventory_entry, "AMOUNT", f"-{_amount(item.base_amount)}") # Debit -> negative
+            _sub(inventory_entry, "AMOUNT", f"-{_amount(item.base_net_amount)}") # Debit -> negative
             _sub(inventory_entry, "ACTUALQTY", f" {item.qty} {item.uom}")
             _sub(inventory_entry, "BILLEDQTY", f" {item.qty} {item.uom}")
             
             # Accounting Allocation for the Purchase Ledger
             accounting_alloc = etree.SubElement(inventory_entry, "ACCOUNTINGALLOCATIONS.LIST")
-            ledger_name = _strip_company(item.expense_account) if item.expense_account else (settings.purchase_ledger or "Purchase")
+            ledger_name = settings.purchase_ledger or "Purchase"
             _sub(accounting_alloc, "LEDGERNAME", ledger_name)
             _sub(accounting_alloc, "ISDEEMEDPOSITIVE", "Yes")
-            _sub(accounting_alloc, "AMOUNT", f"-{_amount(item.base_amount)}")
+            _sub(accounting_alloc, "AMOUNT", f"-{_amount(item.base_net_amount)}")
 
         # Party (Credit)
         party_entry = etree.SubElement(voucher, "LEDGERENTRIES.LIST")
