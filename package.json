@@ -1,0 +1,12 @@
+{
+  "name": "tally_bridge",
+  "version": "1.0.0",
+  "description": "ERPNext to Tally Prime XML Export & Sync",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "Manoj Seenivasan",
+  "license": "MIT"
+}
