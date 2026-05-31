@@ -1,6 +1,6 @@
 app_name = "tally_bridge"
 app_title = "Tally Bridge"
-app_publisher = "Your Company"
+app_publisher = "Manoj Seenivasan"
 app_description = "ERPNext to Tally Prime XML Export & Sync"
 app_email = "admin@example.com"
 app_license = "MIT"
@@ -26,6 +26,7 @@ scheduler_events = {
 # ──────────────────────────────────────────────
 # DocType JS overrides
 # ──────────────────────────────────────────────
+app_include_js = "/assets/tally_bridge/js/tally_bridge.js"
 doctype_js = {
     "Sales Invoice":    "public/js/sales_invoice_tally.js",
     "Purchase Invoice": "public/js/purchase_invoice_tally.js",
