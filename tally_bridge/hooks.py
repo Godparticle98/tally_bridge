@@ -27,10 +27,10 @@ scheduler_events = {
 # DocType JS overrides
 # ──────────────────────────────────────────────
 doctype_js = {
-    "Sales Invoice":    "tally_bridge/doctype/overrides/sales_invoice.js",
-    "Purchase Invoice": "tally_bridge/doctype/overrides/purchase_invoice.js",
-    "Payment Entry":    "tally_bridge/doctype/overrides/payment_entry.js",
-    "Journal Entry":    "tally_bridge/doctype/overrides/journal_entry.js",
+    "Sales Invoice":    "tally_bridge/doctype/overrides/sales_invoice_tally.js",
+    "Purchase Invoice": "tally_bridge/doctype/overrides/purchase_invoice_tally.js",
+    "Payment Entry":    "tally_bridge/doctype/overrides/payment_entry_tally.js",
+    "Journal Entry":    "tally_bridge/doctype/overrides/journal_entry_tally.js",
 }
 
 # NOTE: app_include_js / app_include_css are intentionally omitted.
