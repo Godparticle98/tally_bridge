@@ -14,10 +14,15 @@ export default defineConfig({
       lucideIcons: true,
       jinjaBootData: true,
       buildConfig: {
-        indexHtmlPath: `../${getAppName()}/www/${getAppName()}.html`,
+        outDir: path.resolve(__dirname, `../${getAppName()}/public/frontend`),
+        indexHtmlPath: path.resolve(__dirname, `../${getAppName()}/www/${getAppName()}.html`),
       },
     }),
   ],
+  build: {
+    outDir: path.resolve(__dirname, `../${getAppName()}/public/frontend`),
+    emptyOutDir: true,
+  },
   server: {
     allowedHosts: true,
   },
@@ -45,5 +50,5 @@ function getAppName() {
   //   - <app_name>
   //     - frontend
   //       - vite.config.js
-  return path.basename(path.resolve(__dirname, '../..'))
+  return path.basename(path.resolve(__dirname, '..'))
 }

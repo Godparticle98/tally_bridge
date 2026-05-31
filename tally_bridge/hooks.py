@@ -7,6 +7,19 @@ app_license = "MIT"
 app_version = "1.0.0"
 
 # ──────────────────────────────────────────────
+# Desk Home Screen
+# ──────────────────────────────────────────────
+add_to_apps_screen = [
+    {
+        "name": "tally_bridge",
+        "logo": "/assets/tally_bridge/images/tally-logo.png",
+        "title": "Tally Bridge",
+        "route": "/tally-bridge",
+        "has_permission": "tally_bridge.api.sync.has_app_permission",
+    }
+]
+
+# ──────────────────────────────────────────────
 # Scheduled tasks
 # ──────────────────────────────────────────────
 scheduler_events = {

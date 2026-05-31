@@ -58,3 +58,7 @@ def _run_sync():
         settings.last_sync_at = now_datetime()
         settings.save(ignore_permissions=True)
         frappe.db.commit()
+
+@frappe.whitelist()
+def has_app_permission():
+    return frappe.has_permission("Tally Settings", "read")
