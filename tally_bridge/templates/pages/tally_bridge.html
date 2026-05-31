@@ -150,18 +150,33 @@
             </div>
         </div>
 
-        <div class="tb-export-card" data-type="payment_entries">
+        <div class="tb-export-card" data-type="payment_in">
             <div class="tb-export-top">
-                <div class="tb-export-icon">💰</div>
+                <div class="tb-export-icon">📥</div>
                 <div>
-                    <h4>Payment Entries</h4>
-                    <p>Receipt &amp; payment vouchers</p>
+                    <h4>Payment In (Receipts)</h4>
+                    <p>Incoming payment vouchers</p>
                 </div>
             </div>
-            <div class="tb-export-status" id="status-payment_entries"></div>
+            <div class="tb-export-status" id="status-payment_in"></div>
             <div class="tb-btn-group">
-                <button class="tb-btn tb-btn-primary tb-btn-sm" onclick="runExport('payment_entries', true)">⬆ Push to Tally</button>
-                <button class="tb-btn tb-btn-success tb-btn-sm" onclick="runExport('payment_entries', false)">⬇ Download XML</button>
+                <button class="tb-btn tb-btn-primary tb-btn-sm" onclick="runExport('payment_in', true)">⬆ Push</button>
+                <button class="tb-btn tb-btn-success tb-btn-sm" onclick="runExport('payment_in', false)">⬇ XML</button>
+            </div>
+        </div>
+
+        <div class="tb-export-card" data-type="payment_out">
+            <div class="tb-export-top">
+                <div class="tb-export-icon">📤</div>
+                <div>
+                    <h4>Payment Out (Payments)</h4>
+                    <p>Outgoing payment vouchers</p>
+                </div>
+            </div>
+            <div class="tb-export-status" id="status-payment_out"></div>
+            <div class="tb-btn-group">
+                <button class="tb-btn tb-btn-primary tb-btn-sm" onclick="runExport('payment_out', true)">⬆ Push</button>
+                <button class="tb-btn tb-btn-success tb-btn-sm" onclick="runExport('payment_out', false)">⬇ XML</button>
             </div>
         </div>
 
@@ -211,6 +226,22 @@
             <button class="tb-btn tb-btn-primary" onclick="runExport('all', true)">⬆ Push All to Tally</button>
             <button class="tb-btn tb-btn-success" onclick="runExport('all', false)">⬇ Download Full XML</button>
         </div>
+    </div>
+
+    <!-- ── Import Tally XML ────────────────────────────────────── -->
+    <div class="tb-card">
+        <div class="tb-card-header">
+            <span class="tb-icon">📥</span>
+            <h3>Import Data from Tally (Two-Way Sync)</h3>
+        </div>
+        <div class="tb-info-box" style="margin-top:12px; margin-bottom:12px;">
+            Upload a Tally Master or Transaction XML file. The system will parse the file and synchronize Ledgers, Items, Parties, and Bank Reconciliation dates back into ERPNext.
+        </div>
+        <div class="tb-row" style="align-items: center;">
+            <input type="file" id="tally_import_file" accept=".xml" class="tb-input" style="flex: 1;">
+            <button class="tb-btn tb-btn-primary" onclick="importTallyXML()">Start Import</button>
+        </div>
+        <div id="import-status" class="tb-export-status" style="margin-top: 10px;"></div>
     </div>
 
     <!-- ── Recent Logs ─────────────────────────────────────────── -->
@@ -305,7 +336,8 @@ const METHOD_MAP = {
     parties:           "export_parties",
     sales_invoices:    "export_sales_invoices",
     purchase_invoices: "export_purchase_invoices",
-    payment_entries:   "export_payment_entries",
+    payment_in:        "export_payment_in",
+    payment_out:       "export_payment_out",
     journal_entries:   "export_journal_entries",
     bank_transactions: "export_bank_transactions",
     all:               "export_all",
@@ -442,6 +474,37 @@ function loadRecentLogs() {
             el.innerHTML = html;
         }
     });
+}
+
+function importTallyXML() {
+    const fileInput = document.getElementById("tally_import_file");
+    if (!fileInput.files || !fileInput.files[0]) {
+        frappe.msgprint("Please select an XML file to import.");
+        return;
+    }
+    const file = fileInput.files[0];
+    const statusEl = document.getElementById("import-status");
+    statusEl.innerHTML = `<span style="color:#2563eb;">⏳ Reading file...</span>`;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const xmlContent = e.target.result;
+        statusEl.innerHTML = `<span style="color:#2563eb;">⏳ Processing data in backend... this may take a while.</span>`;
+        
+        frappe.call({
+            method: "tally_bridge.api.import_data.process_tally_xml",
+            args: { xml_data: xmlContent },
+            callback: function(resp) {
+                const d = resp.message;
+                if (d && d.success) {
+                    statusEl.innerHTML = `<span class="tb-status-success">✅ Import successful!<br>${d.message}</span>`;
+                } else {
+                    statusEl.innerHTML = `<span class="tb-status-failed">❌ Import failed: ${(d && d.error) || "Unknown error"}</span>`;
+                }
+            }
+        });
+    };
+    reader.readAsText(file);
 }
 
 /* Init default dates (last 30 days) */

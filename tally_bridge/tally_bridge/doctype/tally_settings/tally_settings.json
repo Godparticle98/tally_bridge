@@ -215,6 +215,36 @@
       "fieldtype": "Data",
       "label": "GST Input Tax Ledger",
       "default": "Input GST"
+    },
+    {
+      "fieldname": "sb1",
+      "fieldtype": "Section Break",
+      "label": "Automation & Sync"
+    },
+    {
+      "fieldname": "enable_auto_sync",
+      "fieldtype": "Check",
+      "label": "Enable Auto Sync"
+    },
+    {
+      "fieldname": "auto_sync_interval",
+      "fieldtype": "Select",
+      "label": "Auto Sync Interval",
+      "options": "Hourly\nTwice a Day\nDaily",
+      "default": "Daily",
+      "depends_on": "eval:doc.enable_auto_sync == 1"
+    },
+    {
+      "fieldname": "cb4",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "bank_recon_master",
+      "fieldtype": "Select",
+      "label": "Bank Reconciliation Master",
+      "options": "ERPNext\nTally",
+      "default": "ERPNext",
+      "description": "Choose which system acts as the master for Bank Reconciliation clearance dates."
     }
   ],
   "permissions": [

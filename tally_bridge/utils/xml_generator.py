@@ -572,12 +572,15 @@ def generate_purchase_invoice_xml(from_date=None, to_date=None, company=None):
 # Payment Entry → Tally Receipt / Payment Voucher
 # ─────────────────────────────────────────────────────────────────────────────
 
-def generate_payment_entry_xml(from_date=None, to_date=None, company=None):
+def generate_payment_entry_xml(from_date=None, to_date=None, company=None, payment_type=None):
     settings = _settings()
     company = company or frappe.defaults.get_user_default("Company")
     root, tallymessage = _voucher_envelope(company, "Vouchers")
 
     filters = {"docstatus": 1, "company": company}
+    if payment_type:
+        filters["payment_type"] = payment_type
+
     if from_date and to_date:
         filters["posting_date"] = ["between", [from_date, to_date]]
     elif from_date:
@@ -591,7 +594,7 @@ def generate_payment_entry_xml(from_date=None, to_date=None, company=None):
         fields=["name", "payment_type", "party_type", "party", "party_name",
                 "posting_date", "paid_amount", "received_amount",
                 "paid_from", "paid_to", "paid_from_account_currency",
-                "remarks", "reference_no"]
+                "remarks", "reference_no", "clearance_date"]
     )
 
     count = 0
@@ -622,6 +625,14 @@ def generate_payment_entry_xml(from_date=None, to_date=None, company=None):
             _sub(bank_entry, "LEDGERNAME", _strip_company(pay.paid_to))
             _sub(bank_entry, "ISDEEMEDPOSITIVE", "Yes")
             _sub(bank_entry, "AMOUNT", f"-{_amount(pay.received_amount)}")
+            
+            if pay.clearance_date:
+                bank_alloc = etree.SubElement(bank_entry, "BANKALLOCATIONS.LIST")
+                _sub(bank_alloc, "DATE", _tally_date(pay.posting_date))
+                _sub(bank_alloc, "INSTRUMENTDATE", _tally_date(pay.posting_date))
+                _sub(bank_alloc, "BANKERSDATE", _tally_date(pay.clearance_date))
+                _sub(bank_alloc, "TRANSACTIONTYPE", "Cheque/DD")
+                _sub(bank_alloc, "AMOUNT", f"-{_amount(pay.received_amount)}")
             # Credit: Party
             party_entry = etree.SubElement(voucher, "ALLLEDGERENTRIES.LIST")
             _sub(party_entry, "LEDGERNAME", pay.party_name)
@@ -638,7 +649,15 @@ def generate_payment_entry_xml(from_date=None, to_date=None, company=None):
             bank_entry = etree.SubElement(voucher, "ALLLEDGERENTRIES.LIST")
             _sub(bank_entry, "LEDGERNAME", _strip_company(pay.paid_from))
             _sub(bank_entry, "ISDEEMEDPOSITIVE", "No")
-            _sub(bank_entry, "AMOUNT", _amount(pay.received_amount))
+            _sub(bank_entry, "AMOUNT", _amount(pay.paid_amount))
+
+            if pay.clearance_date:
+                bank_alloc = etree.SubElement(bank_entry, "BANKALLOCATIONS.LIST")
+                _sub(bank_alloc, "DATE", _tally_date(pay.posting_date))
+                _sub(bank_alloc, "INSTRUMENTDATE", _tally_date(pay.posting_date))
+                _sub(bank_alloc, "BANKERSDATE", _tally_date(pay.clearance_date))
+                _sub(bank_alloc, "TRANSACTIONTYPE", "Cheque/DD")
+                _sub(bank_alloc, "AMOUNT", _amount(pay.paid_amount))
 
         count += 1
 

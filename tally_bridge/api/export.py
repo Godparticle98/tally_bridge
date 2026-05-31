@@ -187,11 +187,11 @@ def export_purchase_invoices(from_date=None, to_date=None, push_to_tally_flag=Fa
 
 
 @frappe.whitelist()
-def export_payment_entries(from_date=None, to_date=None, push_to_tally_flag=False, company=None):
+def export_payment_in(from_date=None, to_date=None, push_to_tally_flag=False, company=None):
     company = company or frappe.defaults.get_user_default("Company")
-    log_name = _create_log("Payment Entry", "Tally XML", from_date, to_date)
+    log_name = _create_log("Payment In", "Tally XML", from_date, to_date)
     try:
-        xml_str, count = generate_payment_entry_xml(from_date, to_date, company)
+        xml_str, count = generate_payment_entry_xml(from_date, to_date, company, payment_type="Receive")
         _finalize_log(log_name, count, 0, xml_str)
 
         if frappe.parse_json(push_to_tally_flag):
@@ -200,7 +200,25 @@ def export_payment_entries(from_date=None, to_date=None, push_to_tally_flag=Fals
 
         return {"success": True, "records": count, "log": log_name, "xml": xml_str}
     except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "Tally Bridge: Payment Entry export")
+        frappe.log_error(frappe.get_traceback(), "Tally Bridge: Payment In export")
+        return {"success": False, "error": str(e), "log": log_name}
+
+
+@frappe.whitelist()
+def export_payment_out(from_date=None, to_date=None, push_to_tally_flag=False, company=None):
+    company = company or frappe.defaults.get_user_default("Company")
+    log_name = _create_log("Payment Out", "Tally XML", from_date, to_date)
+    try:
+        xml_str, count = generate_payment_entry_xml(from_date, to_date, company, payment_type="Pay")
+        _finalize_log(log_name, count, 0, xml_str)
+
+        if frappe.parse_json(push_to_tally_flag):
+            result = push_to_tally(xml_str, log_name)
+            return {"success": True, "records": count, "log": log_name, "tally": result}
+
+        return {"success": True, "records": count, "log": log_name, "xml": xml_str}
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "Tally Bridge: Payment Out export")
         return {"success": False, "error": str(e), "log": log_name}
 
 

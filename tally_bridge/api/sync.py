@@ -10,17 +10,17 @@ from frappe.utils import now_datetime, add_days, today, getdate
 def auto_sync_to_tally():
     """Hourly scheduler — only runs if auto sync is enabled."""
     settings = frappe.get_single("Tally Settings")
-    if not settings.auto_sync_enabled:
+    if not settings.enable_auto_sync:
         return
 
-    if settings.sync_interval == "Hourly":
+    if settings.auto_sync_interval == "Hourly":
         _run_sync()
-    elif settings.sync_interval == "Every 6 Hours":
-        # Only run if last sync was > 6 hours ago
+    elif settings.auto_sync_interval == "Twice a Day":
+        # Only run if last sync was > 11 hours ago
         if settings.last_sync_at:
             from frappe.utils import time_diff_in_hours
             diff = time_diff_in_hours(now_datetime(), settings.last_sync_at)
-            if diff < 6:
+            if diff < 11:
                 return
         _run_sync()
 
@@ -28,7 +28,7 @@ def auto_sync_to_tally():
 def daily_full_sync():
     """Daily full sync — runs regardless of auto_sync_enabled for the daily interval."""
     settings = frappe.get_single("Tally Settings")
-    if settings.auto_sync_enabled and settings.sync_interval == "Daily":
+    if settings.enable_auto_sync and settings.auto_sync_interval == "Daily":
         _run_sync()
 
 
