@@ -42,11 +42,14 @@ def process_tally_xml(xml_data):
         settings = frappe.get_single("Tally Settings")
         debtors_group = settings.get("sundry_debtors_ledger") or "Sundry Debtors"
         creditors_group = settings.get("sundry_creditors_ledger") or "Sundry Creditors"
-        company = settings.get("company")
+        company = settings.get("company") or frappe.defaults.get_user_default("Company")
+        if not company:
+            company = frappe.db.get_value("Company", {}, "name")
+            
         bank_recon_master = settings.get("bank_recon_master") or "ERPNext"
 
         if not company:
-            return {"success": False, "error": "Company not set in Tally Settings."}
+            return {"success": False, "error": "Company not set in Tally Settings, and no default Company found in the system."}
 
         counts = {
             "customers": 0,

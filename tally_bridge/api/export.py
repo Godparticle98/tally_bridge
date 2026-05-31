@@ -76,7 +76,7 @@ def test_tally_connection():
 
 @frappe.whitelist()
 def export_chart_of_accounts(from_date=None, to_date=None, push_to_tally_flag=False, company=None):
-    company = company or frappe.defaults.get_user_default("Company")
+    company = company or frappe.defaults.get_user_default("Company") or frappe.db.get_value("Company", {}, "name")
     log_name = _create_log("Chart of Accounts", "Tally XML", from_date, to_date)
     try:
         xml_str, count = generate_chart_of_accounts_xml(from_date, to_date, company=company)
@@ -95,7 +95,7 @@ def export_chart_of_accounts(from_date=None, to_date=None, push_to_tally_flag=Fa
 
 @frappe.whitelist()
 def export_parties(from_date=None, to_date=None, push_to_tally_flag=False, company=None):
-    company = company or frappe.defaults.get_user_default("Company")
+    company = company or frappe.defaults.get_user_default("Company") or frappe.db.get_value("Company", {}, "name")
     log_name = _create_log("Parties", "Tally XML", from_date, to_date)
     try:
         xml_str, count = generate_parties_xml(from_date, to_date, company=company)
@@ -114,7 +114,7 @@ def export_parties(from_date=None, to_date=None, push_to_tally_flag=False, compa
 
 @frappe.whitelist()
 def export_uoms(from_date=None, to_date=None, push_to_tally_flag=False, company=None):
-    company = company or frappe.defaults.get_user_default("Company")
+    company = company or frappe.defaults.get_user_default("Company") or frappe.db.get_value("Company", {}, "name")
     log_name = _create_log("UOMs", "Tally XML", from_date, to_date)
     try:
         xml_str, count = generate_uoms_xml(from_date, to_date, company=company)
@@ -133,7 +133,7 @@ def export_uoms(from_date=None, to_date=None, push_to_tally_flag=False, company=
 
 @frappe.whitelist()
 def export_stock_items(from_date=None, to_date=None, push_to_tally_flag=False, company=None):
-    company = company or frappe.defaults.get_user_default("Company")
+    company = company or frappe.defaults.get_user_default("Company") or frappe.db.get_value("Company", {}, "name")
     log_name = _create_log("Stock Items", "Tally XML", from_date, to_date)
     try:
         xml_str, count = generate_stock_items_xml(from_date, to_date, company=company)
@@ -152,7 +152,7 @@ def export_stock_items(from_date=None, to_date=None, push_to_tally_flag=False, c
 
 @frappe.whitelist()
 def export_sales_invoices(from_date=None, to_date=None, push_to_tally_flag=False, company=None):
-    company = company or frappe.defaults.get_user_default("Company")
+    company = company or frappe.defaults.get_user_default("Company") or frappe.db.get_value("Company", {}, "name")
     log_name = _create_log("Sales Invoice", "Tally XML", from_date, to_date)
     try:
         xml_str, count = generate_sales_invoice_xml(from_date, to_date, company)
@@ -170,7 +170,7 @@ def export_sales_invoices(from_date=None, to_date=None, push_to_tally_flag=False
 
 @frappe.whitelist()
 def export_purchase_invoices(from_date=None, to_date=None, push_to_tally_flag=False, company=None):
-    company = company or frappe.defaults.get_user_default("Company")
+    company = company or frappe.defaults.get_user_default("Company") or frappe.db.get_value("Company", {}, "name")
     log_name = _create_log("Purchase Invoice", "Tally XML", from_date, to_date)
     try:
         xml_str, count = generate_purchase_invoice_xml(from_date, to_date, company)
@@ -188,7 +188,7 @@ def export_purchase_invoices(from_date=None, to_date=None, push_to_tally_flag=Fa
 
 @frappe.whitelist()
 def export_payment_in(from_date=None, to_date=None, push_to_tally_flag=False, company=None):
-    company = company or frappe.defaults.get_user_default("Company")
+    company = company or frappe.defaults.get_user_default("Company") or frappe.db.get_value("Company", {}, "name")
     log_name = _create_log("Payment In", "Tally XML", from_date, to_date)
     try:
         xml_str, count = generate_payment_entry_xml(from_date, to_date, company, payment_type="Receive")
@@ -206,7 +206,7 @@ def export_payment_in(from_date=None, to_date=None, push_to_tally_flag=False, co
 
 @frappe.whitelist()
 def export_payment_out(from_date=None, to_date=None, push_to_tally_flag=False, company=None):
-    company = company or frappe.defaults.get_user_default("Company")
+    company = company or frappe.defaults.get_user_default("Company") or frappe.db.get_value("Company", {}, "name")
     log_name = _create_log("Payment Out", "Tally XML", from_date, to_date)
     try:
         xml_str, count = generate_payment_entry_xml(from_date, to_date, company, payment_type="Pay")
@@ -224,7 +224,7 @@ def export_payment_out(from_date=None, to_date=None, push_to_tally_flag=False, c
 
 @frappe.whitelist()
 def export_journal_entries(from_date=None, to_date=None, push_to_tally_flag=False, company=None):
-    company = company or frappe.defaults.get_user_default("Company")
+    company = company or frappe.defaults.get_user_default("Company") or frappe.db.get_value("Company", {}, "name")
     log_name = _create_log("Journal Entry", "Tally XML", from_date, to_date)
     try:
         xml_str, count = generate_journal_entry_xml(from_date, to_date, company)
@@ -242,7 +242,7 @@ def export_journal_entries(from_date=None, to_date=None, push_to_tally_flag=Fals
 
 @frappe.whitelist()
 def export_bank_transactions(from_date=None, to_date=None, push_to_tally_flag=False, company=None):
-    company = company or frappe.defaults.get_user_default("Company")
+    company = company or frappe.defaults.get_user_default("Company") or frappe.db.get_value("Company", {}, "name")
     log_name = _create_log("Bank Transaction", "Tally XML", from_date, to_date)
     try:
         xml_str, count = generate_bank_transaction_xml(from_date, to_date, company)
@@ -266,7 +266,7 @@ def export_bank_transactions(from_date=None, to_date=None, push_to_tally_flag=Fa
 def export_all(from_date=None, to_date=None, export_format="Tally XML",
                push_to_tally_flag=False, company=None):
     """Export all enabled doctypes in one call."""
-    company = company or frappe.defaults.get_user_default("Company")
+    company = company or frappe.defaults.get_user_default("Company") or frappe.db.get_value("Company", {}, "name")
     log_name = _create_log("Full Export", export_format, from_date, to_date)
 
     try:
@@ -319,7 +319,7 @@ def export_all(from_date=None, to_date=None, export_format="Tally XML",
 def export_single_document(doctype, docname, push_to_tally_flag=False):
     """Export a single document to Tally XML."""
     doc = frappe.get_doc(doctype, docname)
-    company = doc.company if hasattr(doc, "company") else frappe.defaults.get_user_default("Company")
+    company = doc.company if hasattr(doc, "company") else (frappe.defaults.get_user_default("Company") or frappe.db.get_value("Company", {}, "name"))
 
     if doctype == "Sales Invoice":
         xml_str, count = generate_sales_invoice_xml(
