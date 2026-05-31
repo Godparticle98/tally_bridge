@@ -12,9 +12,31 @@ def process_tally_xml(xml_data):
         return {"success": False, "error": "No XML data provided"}
 
     try:
+        import re
+        
         # Tally XML often contains non-standard characters, but standard ET can usually parse it
         # Strip out any potential BOM or leading whitespace
         xml_data = xml_data.strip()
+        
+        # Remove conflicting xml declaration
+        xml_data = re.sub(r'<\?xml[^>]+\?>', '', xml_data)
+        
+        # Remove invalid entity references like &#x1A;
+        def clean_entities(match):
+            val = match.group(1).lower()
+            try:
+                num = int(val[1:], 16) if val.startswith('x') else int(val)
+                if num in (0x9, 0xA, 0xD) or (0x20 <= num <= 0xD7FF) or (0xE000 <= num <= 0xFFFD):
+                    return match.group(0)
+            except:
+                pass
+            return ''
+            
+        xml_data = re.sub(r'&#([xX]?[0-9a-fA-F]+);', clean_entities, xml_data)
+        
+        # Remove literal invalid characters
+        xml_data = re.sub(r'[^\x09\x0A\x0D\x20-\uD7FF\uE000-\uFFFD\U00010000-\U0010FFFF]', '', xml_data)
+
         root = ET.fromstring(xml_data.encode("utf-8"))
         
         settings = frappe.get_single("Tally Settings")

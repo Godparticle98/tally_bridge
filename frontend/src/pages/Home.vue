@@ -111,7 +111,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { Button, Badge, Input, createResource } from 'frappe-ui'
+import { Button, Badge, Input, createResource, call } from 'frappe-ui'
 import ExportCard from '../components/ExportCard.vue'
 
 const fromDate = ref('')
@@ -173,17 +173,13 @@ function openLogs() {
 }
 
 function runExport(type: string, pushToTally: boolean) {
-  fetch('/api/method/tally_bridge.api.export.export_' + type, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      from_date: fromDate.value,
-      to_date: toDate.value,
-      push_to_tally_flag: pushToTally
-    })
-  }).then(res => res.json()).then(res => {
-    if(res.message && res.message.success && !pushToTally && res.message.xml) {
-      const blob = new Blob([res.message.xml], { type: "application/xml" });
+  call('tally_bridge.api.export.export_' + type, {
+    from_date: fromDate.value,
+    to_date: toDate.value,
+    push_to_tally_flag: pushToTally
+  }).then(res => {
+    if(res && res.success && !pushToTally && res.xml) {
+      const blob = new Blob([res.xml], { type: "application/xml" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -193,6 +189,8 @@ function runExport(type: string, pushToTally: boolean) {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     }
+  }).catch(err => {
+    console.error("Export failed:", err);
   })
 }
 
@@ -212,20 +210,20 @@ function importTallyXML() {
   const reader = new FileReader()
   reader.onload = (e) => {
     importStatus.value = 'Processing data in backend... this may take a while.'
-    fetch('/api/method/tally_bridge.api.import_data.process_tally_xml', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ xml_data: e.target?.result })
-    }).then(res => res.json()).then(res => {
-      if (res.message?.success) {
-        importStatus.value = '✅ Import successful! ' + res.message.message
+    
+    call('tally_bridge.api.import_data.process_tally_xml', {
+      xml_data: e.target?.result
+    }).then(res => {
+      if (res && res.success) {
+        importStatus.value = '✅ Import successful! ' + res.message
         importStatusClass.value = 'text-green-600'
       } else {
-        importStatus.value = '❌ Import failed: ' + (res.message?.error || 'Unknown error')
+        importStatus.value = '❌ Import failed: ' + (res?.error || 'Unknown error')
         importStatusClass.value = 'text-red-600'
       }
     }).catch(err => {
-      importStatus.value = '❌ Request failed.'
+      const errMsg = err.messages ? err.messages[0] : (err.message || err.exc || JSON.stringify(err));
+      importStatus.value = '❌ Request failed: ' + errMsg;
       importStatusClass.value = 'text-red-600'
     })
   }
