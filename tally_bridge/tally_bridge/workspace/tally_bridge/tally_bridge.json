@@ -1,0 +1,84 @@
+{
+ "doctype": "Workspace",
+ "category": "Modules",
+ "content": "[\n {\n  \"id\": \"tally_shortcuts\",\n  \"type\": \"header\",\n  \"data\": {\n   \"text\": \"Tally Integrations\",\n   \"level\": 2,\n   \"col\": 12\n  }\n },\n {\n  \"id\": \"shortcut_export\",\n  \"type\": \"shortcut\",\n  \"data\": {\n   \"shortcut_name\": \"Tally Export Log\",\n   \"col\": 4\n  }\n },\n {\n  \"id\": \"shortcut_import\",\n  \"type\": \"shortcut\",\n  \"data\": {\n   \"shortcut_name\": \"Tally Import Log\",\n   \"col\": 4\n  }\n },\n {\n  \"id\": \"shortcut_settings\",\n  \"type\": \"shortcut\",\n  \"data\": {\n   \"shortcut_name\": \"Tally Settings\",\n   \"col\": 4\n  }\n }\n]",
+ "hide_custom": 0,
+ "icon": "link",
+ "indicator_color": "blue",
+ "is_hidden": 0,
+ "label": "Tally Bridge",
+ "links": [
+  {
+   "dependencies": "",
+   "description": "Log of exports to Tally",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Tally Export Log",
+   "link_count": 0,
+   "link_to": "Tally Export Log",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "description": "Log of imports from Tally",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Tally Import Log",
+   "link_count": 0,
+   "link_to": "Tally Import Log",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "description": "Tally Bridge Settings",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Tally Settings",
+   "link_count": 0,
+   "link_to": "Tally Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  }
+ ],
+ "module": "Tally Bridge",
+ "name": "Tally Bridge",
+ "public": 1,
+ "roles": [
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Accounts Manager"
+  }
+ ],
+ "sequence_id": 10.0,
+ "shortcuts": [
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Tally Export Log",
+   "link_to": "Tally Export Log",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Tally Import Log",
+   "link_to": "Tally Import Log",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Tally Settings",
+   "link_to": "Tally Settings",
+   "type": "DocType"
+  }
+ ],
+ "title": "Tally Bridge"
+}

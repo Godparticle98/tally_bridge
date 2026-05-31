@@ -1,0 +1,75 @@
+{
+  "doctype": "DocType",
+  "name": "Tally Import Log",
+  "module": "Tally Bridge",
+  "issingle": 0,
+  "is_submittable": 0,
+  "track_changes": 0,
+  "autoname": "TBI-.YYYY.-.MM.-.#####",
+  "title_field": "import_type",
+  "fields": [
+    {
+      "fieldname": "import_type",
+      "fieldtype": "Select",
+      "label": "Import Type",
+      "options": "Receipt\nPayment\nJournal\nMaster",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "label": "Status",
+      "options": "Pending\nSuccess\nFailed\nPartial",
+      "default": "Pending",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "records_imported",
+      "fieldtype": "Int",
+      "label": "Records Imported",
+      "read_only": 1
+    },
+    {
+      "fieldname": "records_failed",
+      "fieldtype": "Int",
+      "label": "Records Failed",
+      "read_only": 1
+    },
+    {
+      "fieldname": "imported_at",
+      "fieldtype": "Datetime",
+      "label": "Imported At",
+      "read_only": 1
+    },
+    {
+      "fieldname": "error_log",
+      "fieldtype": "Code",
+      "label": "Error Log",
+      "read_only": 1,
+      "options": "Text"
+    },
+    {
+      "fieldname": "file_attachment",
+      "fieldtype": "Attach",
+      "label": "Imported File"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "delete": 1
+    },
+    {
+      "role": "Accounts Manager",
+      "read": 1,
+      "write": 1
+    },
+    {
+      "role": "Accounts User",
+      "read": 1
+    }
+  ]
+}

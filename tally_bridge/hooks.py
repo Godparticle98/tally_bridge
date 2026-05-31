@@ -37,3 +37,5 @@ doctype_js = {
 # Those keys require a compiled bundle under assets/tally_bridge/
 # which needs an esbuild entry point. Since this app has no custom
 # bundle, removing them prevents the ERR_INVALID_ARG_TYPE build error.
+
+website_route_rules = [{'from_route': '/tally-bridge/<path:app_path>', 'to_route': 'tally_bridge'}, {'from_route': '/tally-bridge', 'to_route': 'tally_bridge'}]

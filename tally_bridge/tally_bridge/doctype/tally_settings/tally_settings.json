@@ -39,20 +39,6 @@
       "fieldtype": "Column Break"
     },
     {
-      "fieldname": "auto_sync_enabled",
-      "fieldtype": "Check",
-      "label": "Enable Auto Sync",
-      "default": 0
-    },
-    {
-      "fieldname": "sync_interval",
-      "fieldtype": "Select",
-      "label": "Sync Interval",
-      "options": "Hourly\nEvery 6 Hours\nDaily",
-      "default": "Hourly",
-      "depends_on": "auto_sync_enabled"
-    },
-    {
       "fieldname": "last_sync_at",
       "fieldtype": "Datetime",
       "label": "Last Sync At",
