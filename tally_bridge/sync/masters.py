@@ -79,44 +79,55 @@ def _gst_registration_type(doc):
 
 
 def _add_party_details(ledger, doc, display_name: str):
+    """Add party mailing/tax information using Tally's documented ledger tags."""
     address = _primary_address(doc)
     pan = getattr(doc, "pan", None)
     gstin = getattr(doc, "gstin", None) or getattr(doc, "tax_id", None)
-    state = getattr(address, "gst_state", None) or getattr(address, "state", None) if address else None
-    country = getattr(address, "country", None) if address else None
-    pincode = getattr(address, "pincode", None) if address else None
 
-    mail = SubElement(ledger, "LEDMAILINGDETAILS.LIST")
-    _text(mail, "APPLICABLEFROM", _effective_date(doc))
-    _text(mail, "MAILINGNAME", display_name)
-    if state:
-        _text(mail, "STATE", state)
-    if country:
-        _text(mail, "COUNTRY", country)
-    if pincode:
-        _text(mail, "PINCODE", pincode)
+    state = None
+    country = None
+    pincode = None
+    if address:
+        state = getattr(address, "gst_state", None) or getattr(address, "state", None)
+        country = getattr(address, "country", None)
+        pincode = getattr(address, "pincode", None)
+
+    # Tally's documented ledger import format places these mailing fields
+    # directly under LEDGER, not inside LEDMAILINGDETAILS.LIST.
+    if display_name:
+        ml = SubElement(ledger, "MAILINGNAME.LIST", {"TYPE": "String"})
+        _text(ml, "MAILINGNAME", display_name)
 
     lines = _address_lines(address)
     if lines:
-        addr_list = SubElement(mail, "ADDRESS.LIST", {"TYPE": "String"})
+        addr_list = SubElement(ledger, "ADDRESS.LIST", {"TYPE": "String"})
         for line in lines:
             _text(addr_list, "ADDRESS", line)
 
+    if pincode:
+        _text(ledger, "PINCODE", pincode)
+    if country:
+        _text(ledger, "COUNTRYNAME", country)
+    if state:
+        _text(ledger, "LEDSTATENAME", state)
+
+    if getattr(doc, "email_id", None):
+        _text(ledger, "EMAIL", doc.email_id)
+    if getattr(doc, "mobile_no", None):
+        _text(ledger, "LEDGERMOBILE", doc.mobile_no)
+
     if pan:
         _text(ledger, "INCOMETAXNUMBER", pan)
-
-    if gstin:
-        _text(ledger, "PARTYGSTIN", gstin)
 
     gst_registration_type = _gst_registration_type(doc)
     if gst_registration_type or gstin or state:
         gst = SubElement(ledger, "LEDGSTREGDETAILS.LIST")
         _text(gst, "APPLICABLEFROM", _effective_date(doc))
-        if gst_registration_type:
-            _text(gst, "GSTREGISTRATIONTYPE", gst_registration_type)
         if state:
             _text(gst, "STATE", state)
             _text(gst, "PLACEOFSUPPLY", state)
+        if gst_registration_type:
+            _text(gst, "GSTREGISTRATIONTYPE", gst_registration_type)
         if gstin:
             _text(gst, "GSTIN", gstin)
 
