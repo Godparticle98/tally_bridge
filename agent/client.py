@@ -12,7 +12,7 @@ class FrappeClient:
 
     def pull_job(self, agent_id):
         r = requests.post(
-            f"{self.base_url}/api/method/tally_bridge.tally_bridge.api.pull_next_job",
+            f"{self.base_url}/api/method/tally_bridge.api.pull_next_job",
             json={"agent_id": agent_id}, headers=self.headers, timeout=self.timeout, verify=self.verify_tls,
         )
         r.raise_for_status()
@@ -28,7 +28,7 @@ class FrappeClient:
             "error": error,
         }
         r = requests.post(
-            f"{self.base_url}/api/method/tally_bridge.tally_bridge.api.ack_job",
+            f"{self.base_url}/api/method/tally_bridge.api.ack_job",
             json=body, headers=self.headers, timeout=self.timeout, verify=self.verify_tls,
         )
         r.raise_for_status()
