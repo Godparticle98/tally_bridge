@@ -1,32 +1,157 @@
 {
-  "doctype":"DocType",
-  "name":"Tally Sync Queue",
-  "module":"Tally Bridge",
-  "field_order":["status","priority","connection","source_doctype","source_name","event","source_modified","payload_hash","payload_json","attempts","next_attempt_at","claimed_by","claimed_at","lease_until","last_http_status","last_latency_ms","last_tally_response","last_error","queued_at","completed_at"],
-  "fields":[
-    {"fieldname":"status","fieldtype":"Select","label":"Status","options":"Queued\nProcessing\nSuccess\nRetry\nFailed","default":"Queued","in_list_view":1},
-    {"fieldname":"priority","fieldtype":"Int","label":"Priority","default":"50","in_list_view":1},
-    {"fieldname":"connection","fieldtype":"Link","options":"Tally Connection Settings","label":"Connection","reqd":1,"in_list_view":1},
-    {"fieldname":"source_doctype","fieldtype":"Link","options":"DocType","label":"Source DocType","reqd":1,"in_list_view":1},
-    {"fieldname":"source_name","fieldtype":"Dynamic Link","options":"source_doctype","label":"Source Document","reqd":1,"in_list_view":1},
-    {"fieldname":"event","fieldtype":"Data","label":"Event","reqd":1},
-    {"fieldname":"source_modified","fieldtype":"Datetime","label":"Source Modified"},
-    {"fieldname":"payload_hash","fieldtype":"Data","label":"Payload Hash"},
-    {"fieldname":"payload_json","fieldtype":"Long Text","label":"Payload JSON"},
-    {"fieldname":"attempts","fieldtype":"Int","label":"Attempts","default":"0"},
-    {"fieldname":"next_attempt_at","fieldtype":"Datetime","label":"Next Attempt At"},
-    {"fieldname":"claimed_by","fieldtype":"Data","label":"Claimed By"},
-    {"fieldname":"claimed_at","fieldtype":"Datetime","label":"Claimed At"},
-    {"fieldname":"lease_until","fieldtype":"Datetime","label":"Lease Until"},
-    {"fieldname":"last_http_status","fieldtype":"Int","label":"Last HTTP Status"},
-    {"fieldname":"last_latency_ms","fieldtype":"Float","label":"Latency (ms)"},
-    {"fieldname":"last_tally_response","fieldtype":"Long Text","label":"Last Tally Response"},
-    {"fieldname":"last_error","fieldtype":"Small Text","label":"Last Error"},
-    {"fieldname":"queued_at","fieldtype":"Datetime","label":"Queued At"},
-    {"fieldname":"completed_at","fieldtype":"Datetime","label":"Completed At"}
+  "doctype": "DocType",
+  "name": "Tally Sync Queue",
+  "module": "tally_bridge",
+  "field_order": [
+    "status",
+    "priority",
+    "connection",
+    "source_doctype",
+    "source_name",
+    "event",
+    "source_modified",
+    "payload_hash",
+    "payload_json",
+    "attempts",
+    "next_attempt_at",
+    "claimed_by",
+    "claimed_at",
+    "lease_until",
+    "last_http_status",
+    "last_latency_ms",
+    "last_tally_response",
+    "last_error",
+    "queued_at",
+    "completed_at"
   ],
-  "permissions":[{"role":"System Manager","read":1,"write":1,"create":1,"delete":1}],
-  "engine":"InnoDB",
-  "sort_field":"queued_at",
-  "sort_order":"DESC"
+  "fields": [
+    {
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "label": "Status",
+      "options": "Queued\nProcessing\nSuccess\nRetry\nFailed",
+      "default": "Queued",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "priority",
+      "fieldtype": "Int",
+      "label": "Priority",
+      "default": "50",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "connection",
+      "fieldtype": "Link",
+      "options": "Tally Connection Settings",
+      "label": "Connection",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "source_doctype",
+      "fieldtype": "Link",
+      "options": "DocType",
+      "label": "Source DocType",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "source_name",
+      "fieldtype": "Dynamic Link",
+      "options": "source_doctype",
+      "label": "Source Document",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "event",
+      "fieldtype": "Data",
+      "label": "Event",
+      "reqd": 1
+    },
+    {
+      "fieldname": "source_modified",
+      "fieldtype": "Datetime",
+      "label": "Source Modified"
+    },
+    {
+      "fieldname": "payload_hash",
+      "fieldtype": "Data",
+      "label": "Payload Hash"
+    },
+    {
+      "fieldname": "payload_json",
+      "fieldtype": "Long Text",
+      "label": "Payload JSON"
+    },
+    {
+      "fieldname": "attempts",
+      "fieldtype": "Int",
+      "label": "Attempts",
+      "default": "0"
+    },
+    {
+      "fieldname": "next_attempt_at",
+      "fieldtype": "Datetime",
+      "label": "Next Attempt At"
+    },
+    {
+      "fieldname": "claimed_by",
+      "fieldtype": "Data",
+      "label": "Claimed By"
+    },
+    {
+      "fieldname": "claimed_at",
+      "fieldtype": "Datetime",
+      "label": "Claimed At"
+    },
+    {
+      "fieldname": "lease_until",
+      "fieldtype": "Datetime",
+      "label": "Lease Until"
+    },
+    {
+      "fieldname": "last_http_status",
+      "fieldtype": "Int",
+      "label": "Last HTTP Status"
+    },
+    {
+      "fieldname": "last_latency_ms",
+      "fieldtype": "Float",
+      "label": "Latency (ms)"
+    },
+    {
+      "fieldname": "last_tally_response",
+      "fieldtype": "Long Text",
+      "label": "Last Tally Response"
+    },
+    {
+      "fieldname": "last_error",
+      "fieldtype": "Small Text",
+      "label": "Last Error"
+    },
+    {
+      "fieldname": "queued_at",
+      "fieldtype": "Datetime",
+      "label": "Queued At"
+    },
+    {
+      "fieldname": "completed_at",
+      "fieldtype": "Datetime",
+      "label": "Completed At"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    }
+  ],
+  "engine": "InnoDB",
+  "sort_field": "queued_at",
+  "sort_order": "DESC"
 }

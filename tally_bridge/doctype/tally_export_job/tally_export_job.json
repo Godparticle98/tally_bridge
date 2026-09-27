@@ -1,25 +1,115 @@
 {
-  "doctype":"DocType",
-  "name":"Tally Export Job",
-  "module":"Tally Bridge",
-  "field_order":["status","connection","from_date","to_date","include_masters","master_scope","format","transaction_types","output_file","created_by_user","started_at","completed_at","error_message"],
-  "fields":[
-    {"fieldname":"status","fieldtype":"Select","label":"Status","options":"Draft\nQueued\nProcessing\nCompleted\nFailed","default":"Draft","in_list_view":1},
-    {"fieldname":"connection","fieldtype":"Link","options":"Tally Connection Settings","label":"Connection","reqd":1,"in_list_view":1},
-    {"fieldname":"from_date","fieldtype":"Date","label":"From Date","reqd":1},
-    {"fieldname":"to_date","fieldtype":"Date","label":"To Date","reqd":1},
-    {"fieldname":"include_masters","fieldtype":"Check","label":"Include Masters","default":"1"},
-    {"fieldname":"master_scope","fieldtype":"Select","label":"Master Scope","options":"All Masters\nMasters Referenced by Transactions","default":"Masters Referenced by Transactions"},
-    {"fieldname":"format","fieldtype":"Select","label":"Export Format","options":"XML","default":"XML"},
-    {"fieldname":"transaction_types","fieldtype":"Small Text","label":"Transaction Types","default":"Sales Invoice, Purchase Invoice, Payment Entry, Journal Entry"},
-    {"fieldname":"output_file","fieldtype":"Attach","label":"Output File"},
-    {"fieldname":"created_by_user","fieldtype":"Link","options":"User","label":"Created By","default":"__user"},
-    {"fieldname":"started_at","fieldtype":"Datetime","label":"Started At"},
-    {"fieldname":"completed_at","fieldtype":"Datetime","label":"Completed At"},
-    {"fieldname":"error_message","fieldtype":"Long Text","label":"Error"}
+  "doctype": "DocType",
+  "name": "Tally Export Job",
+  "module": "tally_bridge",
+  "field_order": [
+    "status",
+    "connection",
+    "from_date",
+    "to_date",
+    "include_masters",
+    "master_scope",
+    "format",
+    "transaction_types",
+    "output_file",
+    "created_by_user",
+    "started_at",
+    "completed_at",
+    "error_message"
   ],
-  "permissions":[{"role":"System Manager","read":1,"write":1,"create":1,"delete":1}],
-  "engine":"InnoDB",
-  "sort_field":"modified",
-  "sort_order":"DESC"
+  "fields": [
+    {
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "label": "Status",
+      "options": "Draft\nQueued\nProcessing\nCompleted\nFailed",
+      "default": "Draft",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "connection",
+      "fieldtype": "Link",
+      "options": "Tally Connection Settings",
+      "label": "Connection",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "from_date",
+      "fieldtype": "Date",
+      "label": "From Date",
+      "reqd": 1
+    },
+    {
+      "fieldname": "to_date",
+      "fieldtype": "Date",
+      "label": "To Date",
+      "reqd": 1
+    },
+    {
+      "fieldname": "include_masters",
+      "fieldtype": "Check",
+      "label": "Include Masters",
+      "default": "1"
+    },
+    {
+      "fieldname": "master_scope",
+      "fieldtype": "Select",
+      "label": "Master Scope",
+      "options": "All Masters\nMasters Referenced by Transactions",
+      "default": "Masters Referenced by Transactions"
+    },
+    {
+      "fieldname": "format",
+      "fieldtype": "Select",
+      "label": "Export Format",
+      "options": "XML",
+      "default": "XML"
+    },
+    {
+      "fieldname": "transaction_types",
+      "fieldtype": "Small Text",
+      "label": "Transaction Types",
+      "default": "Sales Invoice, Purchase Invoice, Payment Entry, Journal Entry"
+    },
+    {
+      "fieldname": "output_file",
+      "fieldtype": "Attach",
+      "label": "Output File"
+    },
+    {
+      "fieldname": "created_by_user",
+      "fieldtype": "Link",
+      "options": "User",
+      "label": "Created By",
+      "default": "__user"
+    },
+    {
+      "fieldname": "started_at",
+      "fieldtype": "Datetime",
+      "label": "Started At"
+    },
+    {
+      "fieldname": "completed_at",
+      "fieldtype": "Datetime",
+      "label": "Completed At"
+    },
+    {
+      "fieldname": "error_message",
+      "fieldtype": "Long Text",
+      "label": "Error"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    }
+  ],
+  "engine": "InnoDB",
+  "sort_field": "modified",
+  "sort_order": "DESC"
 }
