@@ -9,5 +9,8 @@ dependencies = []
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools.packages.find]
+include = ["tally_bridge*"]
+
 [tool.bench.frappe-dependencies]
 frappe = ">=16.0.0,<17.0.0"

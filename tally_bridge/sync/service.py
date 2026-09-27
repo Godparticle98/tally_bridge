@@ -30,14 +30,23 @@ DEFAULT_MAPPINGS = [
 ]
 
 
-def after_install():
+def after_sync():
+    """Seed app-owned defaults only after the app's DocTypes have been synchronized."""
     if not frappe.db.exists("Role", "Tally Bridge Agent"):
         frappe.get_doc({"doctype": "Role", "role_name": "Tally Bridge Agent", "desk_access": 0}).insert(ignore_permissions=True)
+
     for row in DEFAULT_MAPPINGS:
-        if frappe.db.exists("Tally DocType Mapping", {"source_doctype": row["source_doctype"], "trigger_event": row["trigger_event"]}):
+        if frappe.db.exists(
+            "Tally DocType Mapping",
+            {"source_doctype": row["source_doctype"], "trigger_event": row["trigger_event"]},
+        ):
             continue
-        doc = frappe.get_doc({"doctype": "Tally DocType Mapping", "enabled": 1, **row})
-        doc.insert(ignore_permissions=True)
+
+        frappe.get_doc({"doctype": "Tally DocType Mapping", "enabled": 1, **row}).insert(
+            ignore_permissions=True
+        )
+
+    frappe.db.commit()
 
 
 def claim_next_job(agent_id: str):

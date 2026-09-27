@@ -1,0 +1,3 @@
+include README.md
+recursive-include tally_bridge *.json *.py *.txt
+recursive-include tally_bridge *.js *.css *.html

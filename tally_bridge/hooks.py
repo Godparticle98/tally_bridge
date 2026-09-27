@@ -4,6 +4,7 @@ app_publisher = "Draftdu Technologies"
 app_description = "Configurable ERPNext to TallyPrime integration with live sync and period export."
 app_email = "info@draftdu.example"
 app_license = "MIT"
+app_version = "0.1.0"
 
 required_apps = ["erpnext"]
 
@@ -35,4 +36,4 @@ doc_events = {
     },
 }
 
-after_install = "tally_bridge.sync.service.after_install"
+after_sync = "tally_bridge.sync.service.after_sync"

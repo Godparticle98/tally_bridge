@@ -1,0 +1,8 @@
+frappe_base_url: "https://erp.example.com"
+frappe_api_key: "YOUR_API_KEY"
+frappe_api_secret: "YOUR_API_SECRET"
+agent_id: "tally-pc-01"
+poll_interval_seconds: 2
+tally_url: "http://127.0.0.1:9000"
+request_timeout_seconds: 30
+verify_tls: true
