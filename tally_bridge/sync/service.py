@@ -99,7 +99,13 @@ def build_tally_payload(queue_doc):
     connection = frappe.get_doc("Tally Connection Settings", queue_doc.connection)
     snapshot = json.loads(queue_doc.payload_json)
     doc = frappe.get_doc(snapshot)
-    action = "Cancel" if queue_doc.event == "on_cancel" else "Alter" if queue_doc.event == "on_update_after_submit" else "Create"
+    action = (
+        "Cancel"
+        if queue_doc.event == "on_cancel"
+        else "Alter"
+        if queue_doc.event in {"on_update", "on_update_after_submit"}
+        else "Create"
+    )
     mapping_name = frappe.db.get_value(
         "Tally DocType Mapping",
         {"source_doctype": queue_doc.source_doctype, "trigger_event": queue_doc.event, "enabled": 1},
