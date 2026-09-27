@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-
 from xml.etree.ElementTree import Element, SubElement, tostring
 
 import frappe
@@ -79,7 +78,7 @@ def _gst_registration_type(doc):
 
 
 def _add_party_details(ledger, doc, display_name: str):
-    """Add party mailing/tax information using Tally's documented ledger tags."""
+    """Render the party fields using the same hierarchy observed in a Tally export."""
     address = _primary_address(doc)
     pan = getattr(doc, "pan", None)
     gstin = getattr(doc, "gstin", None) or getattr(doc, "tax_id", None)
@@ -92,85 +91,82 @@ def _add_party_details(ledger, doc, display_name: str):
         country = getattr(address, "country", None)
         pincode = getattr(address, "pincode", None)
 
-    # Tally's documented ledger import format places these mailing fields
-    # directly under LEDGER, not inside LEDMAILINGDETAILS.LIST.
-    if display_name:
-        ml = SubElement(ledger, "MAILINGNAME.LIST", {"TYPE": "String"})
-        _text(ml, "MAILINGNAME", display_name)
-
-    lines = _address_lines(address)
-    if lines:
-        addr_list = SubElement(ledger, "ADDRESS.LIST", {"TYPE": "String"})
-        for line in lines:
-            _text(addr_list, "ADDRESS", line)
-
-    if pincode:
-        _text(ledger, "PINCODE", pincode)
     if country:
-        _text(ledger, "COUNTRYNAME", country)
-    if state:
-        _text(ledger, "LEDSTATENAME", state)
-
-    if getattr(doc, "email_id", None):
-        _text(ledger, "EMAIL", doc.email_id)
-    if getattr(doc, "mobile_no", None):
-        _text(ledger, "LEDGERMOBILE", doc.mobile_no)
-
+        _text(ledger, "COUNTRYOFRESIDENCE", country)
     if pan:
         _text(ledger, "INCOMETAXNUMBER", pan)
+
+    _text(ledger, "ISBILLWISEON", "Yes")
+
+    if state:
+        _text(ledger, "PRIORSTATENAME", state)
 
     gst_registration_type = _gst_registration_type(doc)
     if gst_registration_type or gstin or state:
         gst = SubElement(ledger, "LEDGSTREGDETAILS.LIST")
         _text(gst, "APPLICABLEFROM", _effective_date(doc))
-        if state:
-            _text(gst, "STATE", state)
-            _text(gst, "PLACEOFSUPPLY", state)
         if gst_registration_type:
             _text(gst, "GSTREGISTRATIONTYPE", gst_registration_type)
+        if state:
+            _text(gst, "PLACEOFSUPPLY", state)
         if gstin:
             _text(gst, "GSTIN", gstin)
 
+    mailing = SubElement(ledger, "LEDMAILINGDETAILS.LIST")
+    lines = _address_lines(address)
+    if lines:
+        addr_list = SubElement(mailing, "ADDRESS.LIST", {"TYPE": "String"})
+        for line in lines:
+            _text(addr_list, "ADDRESS", line)
+    _text(mailing, "APPLICABLEFROM", _effective_date(doc))
+    if pincode:
+        _text(mailing, "PINCODE", pincode)
+    _text(mailing, "MAILINGNAME", display_name or "")
+    if state:
+        _text(mailing, "STATE", state)
+    if country:
+        _text(mailing, "COUNTRY", country)
+
+
+def _party_ledger(doc, company: str, parent: str, display_name: str, action="Create") -> str:
+    remote = stable_remote_id(frappe.local.site, doc.doctype, doc.name)
+    m = Element("TALLYMESSAGE", {"xmlns:UDF": "TallyUDF"})
+    ledger = SubElement(m, "LEDGER", {"NAME": doc.name, "Action": action})
+    _text(ledger, "PARENT", parent)
+    _add_party_details(ledger, doc, display_name)
+    return _envelope([m], company, remote)
+
 
 def customer(doc, company: str, action="Create") -> str:
-    m = Element("TALLYMESSAGE", {"xmlns:UDF": "TallyUDF"})
-    ledger = SubElement(m, "LEDGER", {"Action": action})
-    # Keep the ERPNext document name as the visible ledger name for now.
-    # A separate master identity mapping will later allow friendly Tally names
-    # while still supporting reliable Alter operations after ERPNext renames.
-    _text(ledger, "NAME", doc.name)
-    _text(ledger, "PARENT", "Sundry Debtors")
-    _add_party_details(ledger, doc, getattr(doc, "customer_name", None) or doc.name)
-    remote = stable_remote_id(frappe.local.site, doc.doctype, doc.name)
-    return _envelope([m], company, remote)
+    return _party_ledger(
+        doc, company, "Sundry Debtors",
+        getattr(doc, "customer_name", None) or doc.name,
+        action,
+    )
 
 
 def supplier(doc, company: str, action="Create") -> str:
-    m = Element("TALLYMESSAGE", {"xmlns:UDF": "TallyUDF"})
-    ledger = SubElement(m, "LEDGER", {"Action": action})
-    _text(ledger, "NAME", doc.name)
-    _text(ledger, "PARENT", "Sundry Creditors")
-    _add_party_details(ledger, doc, getattr(doc, "supplier_name", None) or doc.name)
-    remote = stable_remote_id(frappe.local.site, doc.doctype, doc.name)
-    return _envelope([m], company, remote)
+    return _party_ledger(
+        doc, company, "Sundry Creditors",
+        getattr(doc, "supplier_name", None) or doc.name,
+        action,
+    )
 
 
 def item(doc, company: str, action="Create") -> str:
     m = Element("TALLYMESSAGE", {"xmlns:UDF": "TallyUDF"})
-    item = SubElement(m, "STOCKITEM", {"Action": action})
-    _text(item, "NAME", doc.item_name or doc.name)
+    stock_item = SubElement(m, "STOCKITEM", {"NAME": doc.item_name or doc.name, "Action": action})
     if getattr(doc, "stock_uom", None):
-        _text(item, "BASEUNITS", doc.stock_uom)
+        _text(stock_item, "BASEUNITS", doc.stock_uom)
     remote = stable_remote_id(frappe.local.site, doc.doctype, doc.name)
-    aliases = SubElement(item, "NAME.LIST", {"TYPE": "String"})
+    aliases = SubElement(stock_item, "NAME.LIST", {"TYPE": "String"})
     _text(aliases, "NAME", remote)
     return _envelope([m], company, remote)
 
 
 def uom(doc, company: str, action="Create") -> str:
     m = Element("TALLYMESSAGE", {"xmlns:UDF": "TallyUDF"})
-    unit = SubElement(m, "UNIT", {"Action": action})
-    _text(unit, "NAME", doc.name)
+    unit = SubElement(m, "UNIT", {"NAME": doc.name, "Action": action})
     _text(unit, "ISSIMPLEUNIT", "Yes")
     _text(unit, "ORIGINALNAME", doc.name)
     _text(unit, "DECIMALPLACES", "2")
@@ -179,7 +175,6 @@ def uom(doc, company: str, action="Create") -> str:
 
 
 def _account_parent(doc) -> str:
-    # Conservative starter heuristic; production should expose a configurable account-group mapping.
     root = (getattr(doc, "root_type", "") or "").lower()
     acct = (getattr(doc, "account_type", "") or "").lower()
     if acct == "bank":
@@ -207,8 +202,7 @@ def _account_parent(doc) -> str:
 
 def account(doc, company: str, action="Create") -> str:
     m = Element("TALLYMESSAGE", {"xmlns:UDF": "TallyUDF"})
-    ledger = SubElement(m, "LEDGER", {"Action": action})
-    _text(ledger, "NAME", doc.account_name or doc.name)
+    ledger = SubElement(m, "LEDGER", {"NAME": doc.account_name or doc.name, "Action": action})
     _text(ledger, "PARENT", _account_parent(doc))
     remote = stable_remote_id(frappe.local.site, doc.doctype, doc.name)
     return _envelope([m], company, remote)
