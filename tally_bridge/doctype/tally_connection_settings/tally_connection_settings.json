@@ -1,0 +1,25 @@
+{
+  "doctype": "DocType",
+  "name": "Tally Connection Settings",
+  "module": "Tally Bridge",
+  "issingle": 0,
+  "istable": 0,
+  "editable_grid": 1,
+  "track_changes": 1,
+  "field_order": ["enabled","erpnext_company","tally_company_name","tally_url","format","poll_interval_seconds","notes"],
+  "fields": [
+    {"fieldname":"enabled","fieldtype":"Check","label":"Enabled","default":"1","in_list_view":1},
+    {"fieldname":"erpnext_company","fieldtype":"Link","options":"Company","label":"ERPNext Company","reqd":1,"in_list_view":1},
+    {"fieldname":"tally_company_name","fieldtype":"Data","label":"Tally Company Name","reqd":1,"in_list_view":1},
+    {"fieldname":"tally_url","fieldtype":"Data","label":"Tally URL","default":"http://127.0.0.1:9000"},
+    {"fieldname":"format","fieldtype":"Select","label":"Integration Format","options":"XML\nJSON","default":"XML"},
+    {"fieldname":"poll_interval_seconds","fieldtype":"Int","label":"Agent Poll Interval (seconds)","default":"2"},
+    {"fieldname":"notes","fieldtype":"Small Text","label":"Notes"}
+  ],
+  "permissions": [
+    {"role":"System Manager","read":1,"write":1,"create":1,"delete":1}
+  ],
+  "engine":"InnoDB",
+  "sort_field":"modified",
+  "sort_order":"DESC"
+}

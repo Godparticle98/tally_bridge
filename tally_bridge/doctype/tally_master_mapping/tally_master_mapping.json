@@ -1,0 +1,19 @@
+{
+  "doctype":"DocType",
+  "name":"Tally Master Mapping",
+  "module":"Tally Bridge",
+  "field_order":["erpnext_doctype","erpnext_name","tally_name","tally_master_id","status","last_synced_at","notes"],
+  "fields":[
+    {"fieldname":"erpnext_doctype","fieldtype":"Link","options":"DocType","label":"ERPNext DocType","reqd":1,"in_list_view":1},
+    {"fieldname":"erpnext_name","fieldtype":"Dynamic Link","options":"erpnext_doctype","label":"ERPNext Record","reqd":1,"in_list_view":1},
+    {"fieldname":"tally_name","fieldtype":"Data","label":"Tally Name","reqd":1,"in_list_view":1},
+    {"fieldname":"tally_master_id","fieldtype":"Data","label":"Tally Master ID"},
+    {"fieldname":"status","fieldtype":"Select","label":"Status","options":"Mapped\nPending\nFailed","default":"Pending","in_list_view":1},
+    {"fieldname":"last_synced_at","fieldtype":"Datetime","label":"Last Synced At"},
+    {"fieldname":"notes","fieldtype":"Small Text","label":"Notes"}
+  ],
+  "permissions":[{"role":"System Manager","read":1,"write":1,"create":1,"delete":1}],
+  "engine":"InnoDB",
+  "sort_field":"modified",
+  "sort_order":"DESC"
+}

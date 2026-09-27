@@ -1,0 +1,211 @@
+from __future__ import annotations
+
+from xml.etree.ElementTree import Element, SubElement, tostring
+
+import frappe
+
+from .utils import stable_remote_id
+
+
+def _text(parent, tag, value):
+    node = SubElement(parent, tag)
+    node.text = "" if value is None else str(value)
+    return node
+
+
+def _amount(value: float) -> str:
+    return f"{float(value):.2f}"
+
+
+def envelope(messages, company: str, request_id: str, data_id: str = "Vouchers") -> str:
+    root = Element("ENVELOPE")
+    header = SubElement(root, "HEADER")
+    _text(header, "VERSION", "1")
+    _text(header, "TALLYREQUEST", "Import")
+    _text(header, "TYPE", "Data")
+    _text(header, "ID", data_id)
+
+    body = SubElement(root, "BODY")
+    desc = SubElement(body, "DESC")
+    static = SubElement(desc, "STATICVARIABLES")
+    _text(static, "SVCURRENTCOMPANY", company)
+    _text(static, "SVEXPORTFORMAT", "XML")
+    _text(desc, "REQUESTID", request_id)
+
+    data = SubElement(body, "DATA")
+    for message in messages:
+        data.append(message)
+
+    return tostring(root, encoding="utf-8", xml_declaration=True).decode("utf-8")
+
+
+def _ledger_entry(parent, ledger_name, amount, deemed_positive, party=False, bill=None):
+    e = SubElement(parent, "LEDGERENTRIES.LIST")
+    _text(e, "LEDGERNAME", ledger_name)
+    _text(e, "ISDEEMEDPOSITIVE", "Yes" if deemed_positive else "No")
+    if party:
+        _text(e, "ISPARTYLEDGER", "Yes")
+        _text(e, "ISLASTDEEMEDPOSITIVE", "Yes" if deemed_positive else "No")
+    _text(e, "AMOUNT", _amount(amount))
+    if bill:
+        b = SubElement(e, "BILLALLOCATIONS.LIST")
+        _text(b, "NAME", bill)
+        _text(b, "BILLTYPE", "New Ref")
+        _text(b, "AMOUNT", _amount(amount))
+    return e
+
+
+def sales_invoice(doc, company: str, action: str = "Create") -> str:
+    remote_id = stable_remote_id(frappe.local.site, doc.doctype, doc.name)
+    voucher = Element(
+        "TALLYMESSAGE"
+    )
+    attrs = {
+        "REMOTEID": remote_id,
+        "VCHTYPE": "Sales",
+        "ACTION": action,
+        "OBJVIEW": "Invoice Voucher View",
+    }
+    v = SubElement(voucher, "VOUCHER", attrs)
+    _text(v, "DATE", doc.posting_date.strftime("%Y%m%d") if hasattr(doc.posting_date, "strftime") else str(doc.posting_date).replace("-", ""))
+    _text(v, "VOUCHERTYPENAME", "Sales")
+    _text(v, "VOUCHERNUMBER", doc.name)
+    _text(v, "PERSISTEDVIEW", "Invoice Voucher View")
+    _text(v, "ISINVOICE", "Yes")
+    _text(v, "PARTYLEDGERNAME", doc.customer)
+    _text(v, "NARRATION", doc.remarks or f"ERPNext {doc.name}")
+
+    # Party is Dr in a standard sales invoice.
+    _ledger_entry(v, doc.customer, -float(doc.grand_total), True, party=True, bill=doc.name)
+
+    # Item and accounting allocations.
+    for item in doc.items:
+        inv = SubElement(v, "ALLINVENTORYENTRIES.LIST")
+        _text(inv, "STOCKITEMNAME", item.item_name or item.item_code)
+        _text(inv, "ISDEEMEDPOSITIVE", "No")
+        qty = float(item.qty or 0)
+        rate = float(item.rate or 0)
+        amount = float(item.amount or 0)
+        _text(inv, "ACTUALQTY", f"{qty:g} {item.stock_uom or item.uom or ''}".strip())
+        _text(inv, "BILLEDQTY", f"{qty:g} {item.stock_uom or item.uom or ''}".strip())
+        _text(inv, "RATE", f"{rate:g}/{item.stock_uom or item.uom or 'nos'}")
+        _text(inv, "AMOUNT", _amount(amount))
+        alloc = SubElement(inv, "ACCOUNTINGALLOCATIONS.LIST")
+        _text(alloc, "LEDGERNAME", item.income_account)
+        _text(alloc, "ISDEEMEDPOSITIVE", "No")
+        _text(alloc, "AMOUNT", _amount(amount))
+
+    # Taxes/charges become separate credit ledger entries.
+    for tax in getattr(doc, "taxes", []) or []:
+        if not tax.account_head:
+            continue
+        amount = float(tax.tax_amount or 0)
+        if not amount:
+            continue
+        _ledger_entry(v, tax.account_head, amount, False, party=False)
+
+    return envelope([voucher], company=company, request_id=remote_id)
+
+
+def purchase_invoice(doc, company: str, action: str = "Create") -> str:
+    remote_id = stable_remote_id(frappe.local.site, doc.doctype, doc.name)
+    voucher = Element("TALLYMESSAGE")
+    v = SubElement(
+        voucher,
+        "VOUCHER",
+        {"REMOTEID": remote_id, "VCHTYPE": "Purchase", "ACTION": action, "OBJVIEW": "Invoice Voucher View"},
+    )
+    _text(v, "DATE", str(doc.posting_date).replace("-", ""))
+    _text(v, "VOUCHERTYPENAME", "Purchase")
+    _text(v, "VOUCHERNUMBER", doc.name)
+    _text(v, "PERSISTEDVIEW", "Invoice Voucher View")
+    _text(v, "ISINVOICE", "Yes")
+    _text(v, "PARTYLEDGERNAME", doc.supplier)
+    _text(v, "NARRATION", doc.remarks or f"ERPNext {doc.name}")
+
+    # Supplier is Cr in a standard purchase invoice.
+    _ledger_entry(v, doc.supplier, float(doc.grand_total), False, party=True, bill=doc.name)
+
+    for item in doc.items:
+        inv = SubElement(v, "ALLINVENTORYENTRIES.LIST")
+        _text(inv, "STOCKITEMNAME", item.item_name or item.item_code)
+        _text(inv, "ISDEEMEDPOSITIVE", "Yes")
+        qty = float(item.qty or 0)
+        rate = float(item.rate or 0)
+        amount = float(item.amount or 0)
+        _text(inv, "ACTUALQTY", f"{qty:g} {item.stock_uom or item.uom or ''}".strip())
+        _text(inv, "BILLEDQTY", f"{qty:g} {item.stock_uom or item.uom or ''}".strip())
+        _text(inv, "RATE", f"{rate:g}/{item.stock_uom or item.uom or 'nos'}")
+        _text(inv, "AMOUNT", _amount(-amount))
+        alloc = SubElement(inv, "ACCOUNTINGALLOCATIONS.LIST")
+        _text(alloc, "LEDGERNAME", item.expense_account)
+        _text(alloc, "ISDEEMEDPOSITIVE", "Yes")
+        _text(alloc, "AMOUNT", _amount(amount))
+
+    for tax in getattr(doc, "taxes", []) or []:
+        if not tax.account_head:
+            continue
+        amount = float(tax.tax_amount or 0)
+        if not amount:
+            continue
+        _ledger_entry(v, tax.account_head, -amount, True, party=False)
+
+    return envelope([voucher], company=company, request_id=remote_id)
+
+
+def payment_entry(doc, company: str, action: str = "Create") -> str:
+    remote_id = stable_remote_id(frappe.local.site, doc.doctype, doc.name)
+    voucher_type = {"Receive": "Receipt", "Pay": "Payment", "Internal Transfer": "Contra"}.get(doc.payment_type, "Journal")
+    voucher = Element("TALLYMESSAGE")
+    v = SubElement(voucher, "VOUCHER", {"REMOTEID": remote_id, "VCHTYPE": voucher_type, "ACTION": action, "OBJVIEW": "Accounting Voucher View"})
+    _text(v, "DATE", str(doc.posting_date).replace("-", ""))
+    _text(v, "VOUCHERTYPENAME", voucher_type)
+    _text(v, "VOUCHERNUMBER", doc.name)
+    _text(v, "PERSISTEDVIEW", "Accounting Voucher View")
+    _text(v, "ISINVOICE", "No")
+    _text(v, "NARRATION", doc.remarks or f"ERPNext {doc.name}")
+
+    amount = float(doc.paid_amount or doc.received_amount or 0)
+    if doc.payment_type == "Receive":
+        _ledger_entry(v, doc.paid_to, -amount, True, party=False)
+        _ledger_entry(v, doc.paid_from, amount, False, party=True, bill=getattr(doc, "reference_no", None) or None)
+    elif doc.payment_type == "Pay":
+        _ledger_entry(v, doc.paid_from, amount, True, party=False)
+        _ledger_entry(v, doc.paid_to, -amount, False, party=True, bill=getattr(doc, "reference_no", None) or None)
+    else:
+        _ledger_entry(v, doc.paid_to, -amount, True, party=False)
+        _ledger_entry(v, doc.paid_from, amount, False, party=False)
+
+    return envelope([voucher], company=company, request_id=remote_id)
+
+
+def journal_entry(doc, company: str, action: str = "Create") -> str:
+    remote_id = stable_remote_id(frappe.local.site, doc.doctype, doc.name)
+    voucher = Element("TALLYMESSAGE")
+    v = SubElement(voucher, "VOUCHER", {"REMOTEID": remote_id, "VCHTYPE": "Journal", "ACTION": action, "OBJVIEW": "Accounting Voucher View"})
+    _text(v, "DATE", str(doc.posting_date).replace("-", ""))
+    _text(v, "VOUCHERTYPENAME", "Journal")
+    _text(v, "VOUCHERNUMBER", doc.name)
+    _text(v, "PERSISTEDVIEW", "Accounting Voucher View")
+    _text(v, "ISINVOICE", "No")
+    _text(v, "NARRATION", doc.user_remark or f"ERPNext {doc.name}")
+    for row in doc.accounts:
+        debit = float(row.debit or 0)
+        credit = float(row.credit or 0)
+        if debit:
+            _ledger_entry(v, row.account, debit, True, party=False)
+        elif credit:
+            _ledger_entry(v, row.account, -credit, False, party=False)
+    return envelope([voucher], company=company, request_id=remote_id)
+
+
+def render_document(doc, company: str, action: str = "Create") -> str:
+    if doc.doctype == "Sales Invoice":
+        return sales_invoice(doc, company, action)
+    if doc.doctype == "Purchase Invoice":
+        return purchase_invoice(doc, company, action)
+    if doc.doctype == "Payment Entry":
+        return payment_entry(doc, company, action)
+    if doc.doctype == "Journal Entry":
+        return journal_entry(doc, company, action)
+    frappe.throw(f"No renderer registered for {doc.doctype}")
