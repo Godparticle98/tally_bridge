@@ -15,20 +15,22 @@ def _text(parent, tag, value):
 
 
 def _envelope(messages, company: str, request_id: str) -> str:
+    """Build the Tally HTTP-gateway import envelope used by the live agent."""
     root = Element("ENVELOPE")
     h = SubElement(root, "HEADER")
     _text(h, "VERSION", "1")
-    _text(h, "TALLYREQUEST", "Import Data")
+    _text(h, "TALLYREQUEST", "Import")
+    _text(h, "TYPE", "Data")
+    _text(h, "ID", "All Masters")
+
     body = SubElement(root, "BODY")
-    imp = SubElement(body, "IMPORTDATA")
-    rd = SubElement(imp, "REQUESTDESC")
-    _text(rd, "REPORTNAME", "All Masters")
-    static = SubElement(rd, "STATICVARIABLES")
+    desc = SubElement(body, "DESC")
+    static = SubElement(desc, "STATICVARIABLES")
     _text(static, "SVCURRENTCOMPANY", company)
-    _text(rd, "REQUESTID", request_id)
-    req = SubElement(imp, "REQUESTDATA")
+
+    data = SubElement(body, "DATA")
     for m in messages:
-        req.append(m)
+        data.append(m)
     return tostring(root, encoding="utf-8", xml_declaration=True).decode("utf-8")
 
 
@@ -131,7 +133,7 @@ def _add_party_details(ledger, doc, display_name: str):
 def _party_ledger(doc, company: str, parent: str, display_name: str, action="Create") -> str:
     remote = stable_remote_id(frappe.local.site, doc.doctype, doc.name)
     m = Element("TALLYMESSAGE", {"xmlns:UDF": "TallyUDF"})
-    ledger = SubElement(m, "LEDGER", {"NAME": doc.name, "Action": action})
+    ledger = SubElement(m, "LEDGER", {"NAME": doc.name, "ACTION": action.upper()})
     _text(ledger, "PARENT", parent)
     _add_party_details(ledger, doc, display_name)
     return _envelope([m], company, remote)
@@ -155,7 +157,7 @@ def supplier(doc, company: str, action="Create") -> str:
 
 def item(doc, company: str, action="Create") -> str:
     m = Element("TALLYMESSAGE", {"xmlns:UDF": "TallyUDF"})
-    stock_item = SubElement(m, "STOCKITEM", {"NAME": doc.item_name or doc.name, "Action": action})
+    stock_item = SubElement(m, "STOCKITEM", {"NAME": doc.item_name or doc.name, "ACTION": action.upper()})
     if getattr(doc, "stock_uom", None):
         _text(stock_item, "BASEUNITS", doc.stock_uom)
     remote = stable_remote_id(frappe.local.site, doc.doctype, doc.name)
@@ -202,7 +204,7 @@ def _account_parent(doc) -> str:
 
 def account(doc, company: str, action="Create") -> str:
     m = Element("TALLYMESSAGE", {"xmlns:UDF": "TallyUDF"})
-    ledger = SubElement(m, "LEDGER", {"NAME": doc.account_name or doc.name, "Action": action})
+    ledger = SubElement(m, "LEDGER", {"NAME": doc.account_name or doc.name, "ACTION": action.upper()})
     _text(ledger, "PARENT", _account_parent(doc))
     remote = stable_remote_id(frappe.local.site, doc.doctype, doc.name)
     return _envelope([m], company, remote)
