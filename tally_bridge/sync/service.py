@@ -13,7 +13,9 @@ from .utils import canonical_json
 
 DEFAULT_MAPPINGS = [
     {"source_doctype": "Customer", "trigger_event": "after_insert", "object_type": "Ledger", "priority": 10},
+    {"source_doctype": "Customer", "trigger_event": "on_update", "object_type": "Ledger", "priority": 10},
     {"source_doctype": "Supplier", "trigger_event": "after_insert", "object_type": "Ledger", "priority": 10},
+    {"source_doctype": "Supplier", "trigger_event": "on_update", "object_type": "Ledger", "priority": 10},
     {"source_doctype": "Item", "trigger_event": "after_insert", "object_type": "Stock Item", "priority": 20},
     {"source_doctype": "UOM", "trigger_event": "after_insert", "object_type": "Unit", "priority": 20},
     {"source_doctype": "Account", "trigger_event": "after_insert", "object_type": "Ledger", "priority": 20},
