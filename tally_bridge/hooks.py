@@ -11,8 +11,14 @@ required_apps = ["erpnext"]
 # These are deliberately limited to the first supported integration set.
 # Additional doctypes can be enabled through Tally DocType Mapping without editing core ERPNext.
 doc_events = {
-    "Customer": {"after_insert": "tally_bridge.sync.enqueue.on_document_event"},
-    "Supplier": {"after_insert": "tally_bridge.sync.enqueue.on_document_event"},
+    "Customer": {
+        "after_insert": "tally_bridge.sync.enqueue.on_document_event",
+        "on_update": "tally_bridge.sync.enqueue.on_document_event",
+    },
+    "Supplier": {
+        "after_insert": "tally_bridge.sync.enqueue.on_document_event",
+        "on_update": "tally_bridge.sync.enqueue.on_document_event",
+    },
     "Item": {"after_insert": "tally_bridge.sync.enqueue.on_document_event"},
     "UOM": {"after_insert": "tally_bridge.sync.enqueue.on_document_event"},
     "Account": {"after_insert": "tally_bridge.sync.enqueue.on_document_event"},
