@@ -41,9 +41,10 @@ class FrappeClient:
     def pull_reconciliation(self, agent_id):
         r = requests.post(
             f"{self.base_url}/api/method/tally_bridge.api.pull_reconciliation",
-            headers=self._headers(),
+            headers=self.headers,
             json={"agent_id": agent_id},
             timeout=self.timeout,
+            verify=self.verify_tls,
         )
         if not r.ok:
             raise RuntimeError(f"Frappe API {r.status_code}: {r.text[:5000]}")
