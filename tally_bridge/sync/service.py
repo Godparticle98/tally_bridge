@@ -54,47 +54,123 @@ def after_sync():
     frappe.db.commit()
 
 
+def _dependencies_state(queue_doc):
+    if not queue_doc.depends_on:
+        return True, False, None
+
+    try:
+        dependency_names = json.loads(queue_doc.depends_on)
+    except (TypeError, ValueError):
+        return False, True, "Invalid depends_on queue metadata"
+
+    if not dependency_names:
+        return True, False, None
+
+    rows = frappe.get_all(
+        "Tally Sync Queue",
+        filters={"name": ["in", dependency_names]},
+        fields=["name", "status", "source_doctype", "source_name"],
+        limit_page_length=len(dependency_names),
+    )
+    states = {row.name: row for row in rows}
+    missing = [name for name in dependency_names if name not in states]
+    if missing:
+        return False, True, f"Dependency queue job missing: {', '.join(missing)}"
+
+    failed = [row for row in rows if row.status == "Failed"]
+    if failed:
+        names = ", ".join(
+            f"{row.source_doctype}/{row.source_name}" for row in failed
+        )
+        return False, True, f"Dependency failed: {names}"
+
+    ready = all(row.status == "Success" for row in rows)
+    return ready, False, None if ready else "Waiting for master synchronization"
+
+
 def claim_next_job(agent_id: str):
-    """Atomically claim one queued job using an update conditioned on status=Queued."""
+    """Claim the oldest eligible job whose explicit dependencies are complete."""
     now = now_datetime()
-    # Recover leases left behind by a stopped agent.
+
     frappe.db.sql(
         """
         UPDATE `tabTally Sync Queue`
         SET status='Queued', claimed_by=NULL, claimed_at=NULL, lease_until=NULL
-        WHERE status='Processing' AND lease_until IS NOT NULL AND lease_until < %(now)s
+        WHERE status='Processing'
+          AND lease_until IS NOT NULL
+          AND lease_until < %(now)s
         """,
         {"now": now},
     )
 
-    row = frappe.db.sql(
+    candidates = frappe.db.sql(
         """
-        SELECT name FROM `tabTally Sync Queue`
-        WHERE status = 'Queued'
+        SELECT name
+        FROM `tabTally Sync Queue`
+        WHERE status IN ('Queued', 'Blocked')
           AND (next_attempt_at IS NULL OR next_attempt_at <= %(now)s)
         ORDER BY priority ASC, queued_at ASC
-        LIMIT 1
+        LIMIT 50
         """,
         {"now": now},
         as_dict=True,
     )
-    if not row:
+
+    selected = None
+
+    for row in candidates:
+        candidate = frappe.get_doc("Tally Sync Queue", row.name)
+        ready, failed, message = _dependencies_state(candidate)
+
+        if failed:
+            candidate.status = "Blocked"
+            candidate.last_error = message
+            candidate.save(ignore_permissions=True)
+            continue
+
+        if not ready:
+            candidate.status = "Blocked"
+            candidate.last_error = message
+            candidate.save(ignore_permissions=True)
+            continue
+
+        if candidate.status == "Blocked":
+            candidate.status = "Queued"
+            candidate.last_error = None
+            candidate.save(ignore_permissions=True)
+
+        selected = candidate.name
+        break
+
+    if not selected:
+        frappe.db.commit()
         return None
-    name = row[0]["name"]
+
     lease_until = now + timedelta(minutes=5)
+
     frappe.db.sql(
         """
         UPDATE `tabTally Sync Queue`
-        SET status='Processing', claimed_by=%(agent)s, claimed_at=%(now)s,
-            lease_until=%(lease_until)s, attempts=COALESCE(attempts,0)+1
+        SET status='Processing',
+            claimed_by=%(agent)s,
+            claimed_at=%(now)s,
+            lease_until=%(lease_until)s,
+            attempts=COALESCE(attempts,0)+1
         WHERE name=%(name)s AND status='Queued'
         """,
-        {"agent": agent_id, "now": now, "lease_until": lease_until, "name": name},
+        {
+            "agent": agent_id,
+            "now": now,
+            "lease_until": lease_until,
+            "name": selected,
+        },
     )
     frappe.db.commit()
-    record = frappe.get_doc("Tally Sync Queue", name)
+
+    record = frappe.get_doc("Tally Sync Queue", selected)
     if record.status != "Processing" or record.claimed_by != agent_id:
         return None
+
     return record
 
 
