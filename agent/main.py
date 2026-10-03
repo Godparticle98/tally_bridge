@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import logging
 import time
+from xml.etree import ElementTree as ET
 from pathlib import Path
 
 import yaml
@@ -12,6 +14,41 @@ from tally_response import parse_tally_response
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("tally-bridge-agent")
+
+
+
+def _norm(value):
+    return " ".join(str(value or "").strip().casefold().split())
+
+
+def reconcile_job(job, tally):
+    xml, latency, error = tally.export_ledgers(job["company"])
+    if xml is None:
+        raise RuntimeError(error or "Tally ledger export failed")
+    root = ET.fromstring(xml)
+    tally_ledgers = {}
+    for ledger in root.findall(".//LEDGER"):
+        name = ledger.attrib.get("NAME") or ledger.findtext("NAME")
+        if name:
+            tally_ledgers.setdefault(_norm(name), []).append(name)
+    matches, unmatched, ambiguous = [], [], []
+    for master in job.get("erp_masters", []):
+        candidates = tally_ledgers.get(_norm(master["display_name"]), [])
+        if len(candidates) == 1:
+            matches.append({**master, "tally_name": candidates[0], "match_type": "Exact Name"})
+        elif len(candidates) > 1:
+            ambiguous.append({**master, "candidates": candidates})
+        else:
+            unmatched.append(master)
+    summary = {
+        "erp_master_count": len(job.get("erp_masters", [])),
+        "tally_ledger_count": sum(len(v) for v in tally_ledgers.values()),
+        "exact_matches": len(matches),
+        "unmatched": len(unmatched),
+        "ambiguous": len(ambiguous),
+        "latency_ms": round(latency, 1),
+    }
+    return summary, matches, unmatched + ambiguous
 
 
 def load_config(path="config.yaml"):
@@ -31,6 +68,26 @@ def main():
     log.info("Tally Bridge Agent started: %s", agent_id)
     while True:
         try:
+            reconciliation = frappe.pull_reconciliation(agent_id)
+            if reconciliation:
+                try:
+                    summary, matches, unmatched = reconcile_job(reconciliation, tally)
+                    frappe.ack_reconciliation(
+                        reconciliation["name"], True,
+                        json.dumps(summary), json.dumps(matches), json.dumps(unmatched)
+                    )
+                    log.info(
+                        "Reconciliation %s completed: %s exact, %s unmatched, %s ambiguous",
+                        reconciliation["name"], summary["exact_matches"],
+                        summary["unmatched"], summary["ambiguous"],
+                    )
+                except Exception as exc:
+                    log.exception("Reconciliation failed")
+                    frappe.ack_reconciliation(
+                        reconciliation["name"], False, "{}", "[]", "[]", str(exc)
+                    )
+                continue
+
             job = frappe.pull_job(agent_id)
             if not job:
                 time.sleep(poll)
