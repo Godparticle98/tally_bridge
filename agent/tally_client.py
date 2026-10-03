@@ -117,8 +117,7 @@ class TallyClient:
         return self.export_collection(
             "TallyBridgeLedgerCollection",
             "Ledger",
-            ["Name", "Parent", "IncomeTaxNumber", "LedgerPhone", "LedgerMobile",
-             "LedgerContact", "StateName", "PINCode", "MailingName"],
+            ["Name"],
             company,
         )
 
@@ -126,7 +125,7 @@ class TallyClient:
         return self.export_collection(
             "TallyBridgeStockItemCollection",
             "Stock Item",
-            ["Name", "Parent", "BaseUnits", "OpeningBalance", "OpeningRate"],
+            ["Name"],
             company,
         )
 
@@ -134,6 +133,6 @@ class TallyClient:
         return self.export_collection(
             "TallyBridgeUnitCollection",
             "Unit",
-            ["Name", "BaseUnits", "Conversion"],
+            ["Name"],
             company,
         )
