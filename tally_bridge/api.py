@@ -123,11 +123,35 @@ def pull_reconciliation(agent_id: str):
     job.save(ignore_permissions=True)
     frappe.db.commit()
     connection = frappe.get_doc("Tally Connection Settings", job.connection)
+    masters = []
+    for doctype, name_field, parent_filter in [
+        ("Customer", "customer_name", {}),
+        ("Supplier", "supplier_name", {}),
+        ("Item", "item_name", {}),
+        ("Account", "account_name", {}),
+    ]:
+        filters = dict(parent_filter)
+        if doctype == "Account":
+            filters["is_group"] = 0
+        rows = frappe.get_all(
+            doctype,
+            filters=filters,
+            fields=["name", name_field],
+            limit_page_length=0,
+        )
+        for row in rows:
+            masters.append({
+                "source_doctype": doctype,
+                "source_name": row.name,
+                "display_name": row.get(name_field) or row.name,
+                "object_type": "Stock Item" if doctype == "Item" else "Ledger",
+            })
     return {
         "job": {
             "name": job.name,
             "connection": job.connection,
             "company": connection.tally_company_name,
+            "erp_masters": masters,
         }
     }
 
