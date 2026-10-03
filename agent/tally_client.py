@@ -21,7 +21,7 @@ class TallyClient:
         return r.status_code, r.text, elapsed
 
 
-    def master_exists(self, name, object_type="Ledger"):
+    def master_exists(self, name, object_type="Ledger", company=None):
         """Return (exists, latency_ms, response_xml). exists=None means the probe failed."""
         payload = f"""<?xml version="1.0" encoding="UTF-8"?>
 <ENVELOPE>
@@ -35,7 +35,8 @@ class TallyClient:
   <BODY>
     <DESC>
       <STATICVARIABLES>
-        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+        <SVEXPORTFORMAT>$SysName:XML</SVEXPORTFORMAT>
+        {f"<SVCURRENTCOMPANY>{company}</SVCURRENTCOMPANY>" if company else ""}
       </STATICVARIABLES>
       <FETCHLIST>
         <FETCH>Name</FETCH>
