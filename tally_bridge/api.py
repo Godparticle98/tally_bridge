@@ -404,7 +404,7 @@ def get_dashboard(connection: str | None = None):
     queue_rows = frappe.db.sql(
         """
         SELECT status, COUNT(*) AS count
-        FROM \`tabTally Sync Queue\`
+        FROM `tabTally Sync Queue`
         WHERE connection=%(connection)s
         GROUP BY status
         """,
@@ -416,7 +416,7 @@ def get_dashboard(connection: str | None = None):
     identity_rows = frappe.db.sql(
         """
         SELECT object_type, status, COUNT(*) AS count
-        FROM \`tabTally Master Identity\`
+        FROM `tabTally Master Identity`
         WHERE connection=%(connection)s
         GROUP BY object_type, status
         """,
