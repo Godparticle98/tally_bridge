@@ -149,7 +149,7 @@ def _party_ledger(
     target_name = tally_name or display_name
     m = Element("TALLYMESSAGE", {"xmlns:UDF": "TallyUDF"})
     ledger = SubElement(m, "LEDGER", {"NAME": target_name, "ACTION": action.upper()})
-    _ledger_name_list(ledger, display_name)
+    _text(ledger, "NAME", display_name)
     _text(ledger, "PARENT", parent)
     _add_party_details(ledger, doc, display_name)
     return _envelope([m], company, remote)
@@ -170,6 +170,7 @@ def item(doc, company: str, action="Create", tally_name: str | None = None) -> s
     target_name = tally_name or display_name
     m = Element("TALLYMESSAGE", {"xmlns:UDF": "TallyUDF"})
     stock_item = SubElement(m, "STOCKITEM", {"NAME": target_name, "ACTION": action.upper()})
+    _text(stock_item, "NAME", display_name)
     names = SubElement(stock_item, "NAME.LIST", {"TYPE": "String"})
     _text(names, "NAME", display_name)
     remote = stable_remote_id(frappe.local.site, doc.doctype, doc.name)
@@ -222,7 +223,7 @@ def account(doc, company: str, action="Create", tally_name: str | None = None) -
     target_name = tally_name or display_name
     m = Element("TALLYMESSAGE", {"xmlns:UDF": "TallyUDF"})
     ledger = SubElement(m, "LEDGER", {"NAME": target_name, "ACTION": action.upper()})
-    _ledger_name_list(ledger, display_name)
+    _text(ledger, "NAME", display_name)
     _text(ledger, "PARENT", _account_parent(doc))
     remote = stable_remote_id(frappe.local.site, doc.doctype, doc.name)
     return _envelope([m], company, remote)
