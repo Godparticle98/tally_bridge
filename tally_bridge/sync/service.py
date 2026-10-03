@@ -160,6 +160,11 @@ def build_tally_payload(queue_doc):
         if identity:
             action = "Alter"
             tally_name = identity.get("tally_name")
+        elif queue_doc.event in {"on_update", "on_update_after_submit"}:
+            # Backward-compatible migration path for masters synced by older
+            # versions, where the Tally name was the ERPNext Doc ID.
+            action = "Alter"
+            tally_name = doc.name
         else:
             action = "Create"
             tally_name = None
@@ -172,6 +177,24 @@ def build_tally_payload(queue_doc):
         )
 
     return render_document(doc, company=connection.tally_company_name, action=action)
+
+
+def build_master_create_fallback(queue_doc):
+    """Build a CREATE payload for a master whose legacy ALTER target is absent."""
+    connection = frappe.get_doc("Tally Connection Settings", queue_doc.connection)
+    snapshot = json.loads(queue_doc.payload_json)
+    doc = frappe.get_doc(snapshot)
+    mapping_name = frappe.db.get_value(
+        "Tally DocType Mapping",
+        {"source_doctype": queue_doc.source_doctype, "trigger_event": queue_doc.event, "enabled": 1},
+        "name",
+    )
+    if not mapping_name:
+        frappe.throw(f"No active Tally mapping for {queue_doc.source_doctype} / {queue_doc.event}")
+    mapping = frappe.get_doc("Tally DocType Mapping", mapping_name)
+    if mapping.object_type not in {"Ledger", "Stock Item", "Unit"}:
+        return None
+    return render_master(doc, company=connection.tally_company_name, action="Create", tally_name=None)
 
 
 def _upsert_master_identity(q, success: bool):
