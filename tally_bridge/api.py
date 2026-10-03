@@ -3,7 +3,13 @@ from __future__ import annotations
 import frappe
 from frappe import _
 
-from .sync.service import build_tally_payload, claim_next_job, complete_job
+from .sync.service import (
+    build_master_create_fallback,
+    build_tally_payload,
+    claim_next_job,
+    complete_job,
+    _master_identity,
+)
 
 
 _ALLOWED_ROLES = {"Tally Bridge Agent", "System Manager"}
@@ -23,6 +29,14 @@ def pull_next_job(agent_id: str):
     q = claim_next_job(agent_id)
     if not q:
         return {"job": None}
+    payload = build_tally_payload(q)
+    fallback_payload = None
+
+    master_doctypes = {"Customer", "Supplier", "Item", "UOM", "Account"}
+    if q.source_doctype in master_doctypes and q.event in {"on_update", "on_update_after_submit"}:
+        if not _master_identity(q.connection, q.source_doctype, q.source_name):
+            fallback_payload = build_master_create_fallback(q)
+
     return {
         "job": {
             "name": q.name,
@@ -30,7 +44,8 @@ def pull_next_job(agent_id: str):
             "source_doctype": q.source_doctype,
             "source_name": q.source_name,
             "event": q.event,
-            "payload_xml": build_tally_payload(q),
+            "payload_xml": payload,
+            "fallback_payload_xml": fallback_payload,
             "attempts": q.attempts,
         }
     }
