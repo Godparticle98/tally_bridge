@@ -1,0 +1,94 @@
+{
+  "doctype": "DocType",
+  "name": "Tally Master Identity",
+  "module": "tally_bridge",
+  "field_order": [
+    "connection",
+    "source_doctype",
+    "source_name",
+    "object_type",
+    "tally_name",
+    "stable_remote_id",
+    "last_source_hash",
+    "last_synced_at",
+    "status"
+  ],
+  "fields": [
+    {
+      "fieldname": "connection",
+      "fieldtype": "Link",
+      "options": "Tally Connection Settings",
+      "label": "Connection",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "source_doctype",
+      "fieldtype": "Link",
+      "options": "DocType",
+      "label": "ERPNext DocType",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "source_name",
+      "fieldtype": "Data",
+      "label": "ERPNext Document ID",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "object_type",
+      "fieldtype": "Select",
+      "options": "Ledger\nStock Item\nUnit",
+      "label": "Tally Object",
+      "reqd": 1
+    },
+    {
+      "fieldname": "tally_name",
+      "fieldtype": "Data",
+      "label": "Tally Master Name",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "stable_remote_id",
+      "fieldtype": "Data",
+      "label": "Stable Remote ID"
+    },
+    {
+      "fieldname": "last_source_hash",
+      "fieldtype": "Data",
+      "label": "Last Source Hash"
+    },
+    {
+      "fieldname": "last_synced_at",
+      "fieldtype": "Datetime",
+      "label": "Last Synced At"
+    },
+    {
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "options": "Pending\nSynced\nError",
+      "label": "Status",
+      "default": "Pending",
+      "in_list_view": 1
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    },
+    {
+      "role": "Tally Bridge Agent",
+      "read": 1
+    }
+  ],
+  "engine": "InnoDB",
+  "sort_field": "modified",
+  "sort_order": "DESC"
+}
