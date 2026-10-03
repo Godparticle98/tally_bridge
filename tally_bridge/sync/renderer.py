@@ -17,6 +17,24 @@ def _amount(value: float) -> str:
     return f"{float(value):.2f}"
 
 
+def _master_name(connection, doctype, source_name):
+    if not source_name:
+        return source_name
+    if not connection:
+        return source_name
+    value = frappe.db.get_value(
+        "Tally Master Identity",
+        {
+            "connection": connection,
+            "source_doctype": doctype,
+            "source_name": source_name,
+            "status": "Synced",
+        },
+        "tally_name",
+    )
+    return value or source_name
+
+
 def envelope(messages, company: str, request_id: str, data_id: str = "Vouchers") -> str:
     root = Element("ENVELOPE")
     header = SubElement(root, "HEADER")
@@ -39,9 +57,9 @@ def envelope(messages, company: str, request_id: str, data_id: str = "Vouchers")
     return tostring(root, encoding="utf-8", xml_declaration=True).decode("utf-8")
 
 
-def _ledger_entry(parent, ledger_name, amount, deemed_positive, party=False, bill=None):
+def _ledger_entry(parent, ledger_name, amount, deemed_positive, party=False, bill=None, connection=None, ledger_doctype="Account"):
     e = SubElement(parent, "LEDGERENTRIES.LIST")
-    _text(e, "LEDGERNAME", ledger_name)
+    _text(e, "LEDGERNAME", _master_name(connection, ledger_doctype, ledger_name))
     _text(e, "ISDEEMEDPOSITIVE", "Yes" if deemed_positive else "No")
     if party:
         _text(e, "ISPARTYLEDGER", "Yes")
@@ -55,7 +73,7 @@ def _ledger_entry(parent, ledger_name, amount, deemed_positive, party=False, bil
     return e
 
 
-def sales_invoice(doc, company: str, action: str = "Create") -> str:
+def sales_invoice(doc, company: str, action: str = "Create", connection: str | None = None) -> str:
     remote_id = stable_remote_id(frappe.local.site, doc.doctype, doc.name)
     voucher = Element(
         "TALLYMESSAGE"
@@ -72,16 +90,16 @@ def sales_invoice(doc, company: str, action: str = "Create") -> str:
     _text(v, "VOUCHERNUMBER", doc.name)
     _text(v, "PERSISTEDVIEW", "Invoice Voucher View")
     _text(v, "ISINVOICE", "Yes")
-    _text(v, "PARTYLEDGERNAME", doc.customer)
+    _text(v, "PARTYLEDGERNAME", _master_name(connection, "Customer", doc.customer))
     _text(v, "NARRATION", doc.remarks or f"ERPNext {doc.name}")
 
     # Party is Dr in a standard sales invoice.
-    _ledger_entry(v, doc.customer, -float(doc.grand_total), True, party=True, bill=doc.name)
+    _ledger_entry(v, doc.customer, -float(doc.grand_total), True, party=True, bill=doc.name, connection=connection, ledger_doctype="Customer")
 
     # Item and accounting allocations.
     for item in doc.items:
         inv = SubElement(v, "ALLINVENTORYENTRIES.LIST")
-        _text(inv, "STOCKITEMNAME", item.item_name or item.item_code)
+        _text(inv, "STOCKITEMNAME", _master_name(connection, "Item", item.item_code))
         _text(inv, "ISDEEMEDPOSITIVE", "No")
         qty = float(item.qty or 0)
         rate = float(item.rate or 0)
@@ -91,7 +109,7 @@ def sales_invoice(doc, company: str, action: str = "Create") -> str:
         _text(inv, "RATE", f"{rate:g}/{item.stock_uom or item.uom or 'nos'}")
         _text(inv, "AMOUNT", _amount(amount))
         alloc = SubElement(inv, "ACCOUNTINGALLOCATIONS.LIST")
-        _text(alloc, "LEDGERNAME", item.income_account)
+        _text(alloc, "LEDGERNAME", _master_name(connection, "Account", item.income_account))
         _text(alloc, "ISDEEMEDPOSITIVE", "No")
         _text(alloc, "AMOUNT", _amount(amount))
 
@@ -102,12 +120,12 @@ def sales_invoice(doc, company: str, action: str = "Create") -> str:
         amount = float(tax.tax_amount or 0)
         if not amount:
             continue
-        _ledger_entry(v, tax.account_head, amount, False, party=False)
+        _ledger_entry(v, tax.account_head, amount, False, party=False, connection=connection)
 
     return envelope([voucher], company=company, request_id=remote_id)
 
 
-def purchase_invoice(doc, company: str, action: str = "Create") -> str:
+def purchase_invoice(doc, company: str, action: str = "Create", connection: str | None = None) -> str:
     remote_id = stable_remote_id(frappe.local.site, doc.doctype, doc.name)
     voucher = Element("TALLYMESSAGE")
     v = SubElement(
@@ -120,11 +138,11 @@ def purchase_invoice(doc, company: str, action: str = "Create") -> str:
     _text(v, "VOUCHERNUMBER", doc.name)
     _text(v, "PERSISTEDVIEW", "Invoice Voucher View")
     _text(v, "ISINVOICE", "Yes")
-    _text(v, "PARTYLEDGERNAME", doc.supplier)
+    _text(v, "PARTYLEDGERNAME", _master_name(connection, "Supplier", doc.supplier))
     _text(v, "NARRATION", doc.remarks or f"ERPNext {doc.name}")
 
     # Supplier is Cr in a standard purchase invoice.
-    _ledger_entry(v, doc.supplier, float(doc.grand_total), False, party=True, bill=doc.name)
+    _ledger_entry(v, doc.supplier, float(doc.grand_total), False, party=True, bill=doc.name, connection=connection, ledger_doctype="Supplier")
 
     for item in doc.items:
         inv = SubElement(v, "ALLINVENTORYENTRIES.LIST")
@@ -138,7 +156,7 @@ def purchase_invoice(doc, company: str, action: str = "Create") -> str:
         _text(inv, "RATE", f"{rate:g}/{item.stock_uom or item.uom or 'nos'}")
         _text(inv, "AMOUNT", _amount(-amount))
         alloc = SubElement(inv, "ACCOUNTINGALLOCATIONS.LIST")
-        _text(alloc, "LEDGERNAME", item.expense_account)
+        _text(alloc, "LEDGERNAME", _master_name(connection, "Account", item.expense_account))
         _text(alloc, "ISDEEMEDPOSITIVE", "Yes")
         _text(alloc, "AMOUNT", _amount(amount))
 
@@ -148,12 +166,12 @@ def purchase_invoice(doc, company: str, action: str = "Create") -> str:
         amount = float(tax.tax_amount or 0)
         if not amount:
             continue
-        _ledger_entry(v, tax.account_head, -amount, True, party=False)
+        _ledger_entry(v, tax.account_head, -amount, True, party=False, connection=connection)
 
     return envelope([voucher], company=company, request_id=remote_id)
 
 
-def payment_entry(doc, company: str, action: str = "Create") -> str:
+def payment_entry(doc, company: str, action: str = "Create", connection: str | None = None) -> str:
     remote_id = stable_remote_id(frappe.local.site, doc.doctype, doc.name)
     voucher_type = {"Receive": "Receipt", "Pay": "Payment", "Internal Transfer": "Contra"}.get(doc.payment_type, "Journal")
     voucher = Element("TALLYMESSAGE")
@@ -167,19 +185,19 @@ def payment_entry(doc, company: str, action: str = "Create") -> str:
 
     amount = float(doc.paid_amount or doc.received_amount or 0)
     if doc.payment_type == "Receive":
-        _ledger_entry(v, doc.paid_to, -amount, True, party=False)
-        _ledger_entry(v, doc.paid_from, amount, False, party=True, bill=getattr(doc, "reference_no", None) or None)
+        _ledger_entry(v, doc.paid_to, -amount, True, party=False, connection=connection)
+        _ledger_entry(v, doc.paid_from, amount, False, party=True, bill=getattr(doc, "reference_no", None) or None, connection=connection)
     elif doc.payment_type == "Pay":
-        _ledger_entry(v, doc.paid_from, amount, True, party=False)
-        _ledger_entry(v, doc.paid_to, -amount, False, party=True, bill=getattr(doc, "reference_no", None) or None)
+        _ledger_entry(v, doc.paid_from, amount, True, party=False, connection=connection)
+        _ledger_entry(v, doc.paid_to, -amount, False, party=True, bill=getattr(doc, "reference_no", None) or None, connection=connection)
     else:
-        _ledger_entry(v, doc.paid_to, -amount, True, party=False)
-        _ledger_entry(v, doc.paid_from, amount, False, party=False)
+        _ledger_entry(v, doc.paid_to, -amount, True, party=False, connection=connection)
+        _ledger_entry(v, doc.paid_from, amount, False, party=False, connection=connection)
 
     return envelope([voucher], company=company, request_id=remote_id)
 
 
-def journal_entry(doc, company: str, action: str = "Create") -> str:
+def journal_entry(doc, company: str, action: str = "Create", connection: str | None = None) -> str:
     remote_id = stable_remote_id(frappe.local.site, doc.doctype, doc.name)
     voucher = Element("TALLYMESSAGE")
     v = SubElement(voucher, "VOUCHER", {"REMOTEID": remote_id, "VCHTYPE": "Journal", "ACTION": action, "OBJVIEW": "Accounting Voucher View"})
@@ -193,19 +211,19 @@ def journal_entry(doc, company: str, action: str = "Create") -> str:
         debit = float(row.debit or 0)
         credit = float(row.credit or 0)
         if debit:
-            _ledger_entry(v, row.account, debit, True, party=False)
+            _ledger_entry(v, row.account, debit, True, party=False, connection=connection)
         elif credit:
-            _ledger_entry(v, row.account, -credit, False, party=False)
+            _ledger_entry(v, row.account, -credit, False, party=False, connection=connection)
     return envelope([voucher], company=company, request_id=remote_id)
 
 
-def render_document(doc, company: str, action: str = "Create") -> str:
+def render_document(doc, company: str, action: str = "Create", connection: str | None = None) -> str:
     if doc.doctype == "Sales Invoice":
-        return sales_invoice(doc, company, action)
+        return sales_invoice(doc, company, action, connection)
     if doc.doctype == "Purchase Invoice":
-        return purchase_invoice(doc, company, action)
+        return purchase_invoice(doc, company, action, connection)
     if doc.doctype == "Payment Entry":
-        return payment_entry(doc, company, action)
+        return payment_entry(doc, company, action, connection)
     if doc.doctype == "Journal Entry":
-        return journal_entry(doc, company, action)
+        return journal_entry(doc, company, action, connection)
     frappe.throw(f"No renderer registered for {doc.doctype}")
