@@ -230,15 +230,15 @@ def account(doc, company: str, action="Create", tally_name: str | None = None) -
 
 
 
-def render_master(doc, company: str, action="Create") -> str:
+def render_master(doc, company: str, action="Create", tally_name: str | None = None) -> str:
     if doc.doctype == "Customer":
-        return customer(doc, company, action)
+        return customer(doc, company, action, tally_name)
     if doc.doctype == "Supplier":
-        return supplier(doc, company, action)
+        return supplier(doc, company, action, tally_name)
     if doc.doctype == "Item":
-        return item(doc, company, action)
+        return item(doc, company, action, tally_name)
     if doc.doctype == "UOM":
-        return uom(doc, company, action)
+        return uom(doc, company, action, tally_name)
     if doc.doctype == "Account":
-        return account(doc, company, action)
+        return account(doc, company, action, tally_name)
     frappe.throw(f"No master renderer registered for {doc.doctype}")
