@@ -106,6 +106,31 @@ def ack_job(
     return {"ok": True}
 
 
+
+
+@frappe.whitelist(methods=["POST"])
+def queue_export_job(job_name: str):
+    _check_agent()
+    job = frappe.get_doc("Tally Export Job", job_name)
+    job.check_permission("write")
+    if job.status == "Processing":
+        frappe.throw(_("This export is already processing."))
+    job.run_method("validate")
+    job.status = "Queued"
+    job.started_at = None
+    job.completed_at = None
+    job.error_message = None
+    job.output_file = None
+    job.save(ignore_permissions=True)
+    frappe.db.commit()
+    frappe.enqueue(
+        "tally_bridge.sync.exporter.generate_period_export",
+        job_name=job.name,
+        queue="long",
+        enqueue_after_commit=True,
+    )
+    return {"job": job.name, "status": "Queued"}
+
 @frappe.whitelist(methods=["POST"])
 def create_period_export(
     connection: str,
