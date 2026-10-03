@@ -307,6 +307,8 @@ def _upsert_master_identity(q, success: bool):
         identity.last_source_hash = source_hash
         identity.last_synced_at = now_datetime()
         identity.status = "Synced"
+        if hasattr(identity, "match_status"):
+            identity.match_status = "Matched"
         identity.save(ignore_permissions=True)
     else:
         frappe.get_doc({
@@ -320,6 +322,7 @@ def _upsert_master_identity(q, success: bool):
             "last_source_hash": source_hash,
             "last_synced_at": now_datetime(),
             "status": "Synced",
+            "match_status": "Matched",
         }).insert(ignore_permissions=True)
 
 
