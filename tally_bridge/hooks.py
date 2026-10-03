@@ -19,9 +19,21 @@ doc_events = {
         "after_insert": "tally_bridge.sync.enqueue.on_document_event",
         "on_update": "tally_bridge.sync.enqueue.on_document_event",
     },
-    "Item": {"after_insert": "tally_bridge.sync.enqueue.on_document_event"},
-    "UOM": {"after_insert": "tally_bridge.sync.enqueue.on_document_event"},
-    "Account": {"after_insert": "tally_bridge.sync.enqueue.on_document_event"},
+    "Item": {
+        "after_insert": "tally_bridge.sync.enqueue.on_document_event",
+        "on_update": "tally_bridge.sync.enqueue.on_document_event",
+    },
+    "UOM": {
+        "after_insert": "tally_bridge.sync.enqueue.on_document_event",
+        "on_update": "tally_bridge.sync.enqueue.on_document_event",
+    },
+    "Account": {
+        "after_insert": "tally_bridge.sync.enqueue.on_document_event",
+        "on_update": "tally_bridge.sync.enqueue.on_document_event",
+    },
+    "Address": {
+        "on_update": "tally_bridge.sync.enqueue.on_address_update",
+    },
     "Sales Invoice": {
         "on_submit": "tally_bridge.sync.enqueue.on_document_event",
         "on_cancel": "tally_bridge.sync.enqueue.on_document_event",
