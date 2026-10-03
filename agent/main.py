@@ -21,11 +21,51 @@ def _norm(value):
     return " ".join(str(value or "").strip().casefold().split())
 
 
+def _sanitize_xml_for_parser(xml):
+    # Tally can return legacy/control characters in exported master data.
+    # XML 1.0 does not permit them, even when they appear as character references.
+    import re
+
+    xml = re.sub(
+        r"&#(?:x[0-8bBcCdDeEfF]+|[0-9]+);",
+        lambda m: "" if not _valid_xml_codepoint(m.group(0)) else m.group(0),
+        xml,
+        flags=re.IGNORECASE,
+    )
+    return "".join(
+        ch for ch in xml
+        if ch in "\t\n\r"
+        or 0x20 <= ord(ch) <= 0xD7FF
+        or 0xE000 <= ord(ch) <= 0xFFFD
+        or 0x10000 <= ord(ch) <= 0x10FFFF
+    )
+
+
+def _valid_xml_codepoint(ref):
+    try:
+        value = int(ref[3:-1], 16) if ref.lower().startswith("&#x") else int(ref[2:-1])
+    except ValueError:
+        return False
+    return (
+        value in (0x9, 0xA, 0xD)
+        or 0x20 <= value <= 0xD7FF
+        or 0xE000 <= value <= 0xFFFD
+        or 0x10000 <= value <= 0x10FFFF
+    )
+
+
 def reconcile_job(job, tally):
     xml, latency, error = tally.export_ledgers(job["company"])
     if xml is None:
         raise RuntimeError(error or "Tally ledger export failed")
-    root = ET.fromstring(xml)
+    try:
+        root = ET.fromstring(xml)
+    except ET.ParseError as first_error:
+        log.warning(
+            "Tally ledger export contains XML 1.0-invalid characters; sanitizing response: %s",
+            first_error,
+        )
+        root = ET.fromstring(_sanitize_xml_for_parser(xml))
     tally_ledgers = {}
     for ledger in root.findall(".//LEDGER"):
         name = ledger.attrib.get("NAME") or ledger.findtext("NAME")
