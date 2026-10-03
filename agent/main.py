@@ -137,12 +137,21 @@ def reconcile_job(job, tally):
         all_unmatched.extend(unmatched)
         all_ambiguous.extend(ambiguous)
 
+        shared_records = sum(
+            1 for item in matches if item.get("reconciliation_status") == "Shared Mapping"
+        )
+        shared_buckets = {
+            (_norm(item["object_type"]), _norm(item["tally_name"]))
+            for item in matches
+            if item.get("reconciliation_status") == "Shared Mapping"
+        }
         type_summary[object_type] = {
             "erp_count": len(masters),
             "tally_count": sum(len(v) for v in tally_objects.values()),
             "exact_matches": len(matches),
             "matched": sum(1 for item in matches if item.get("reconciliation_status") == "Matched"),
-            "shared_mapping": sum(1 for item in matches if item.get("reconciliation_status") == "Shared Mapping"),
+            "shared_mappings": len(shared_buckets),
+            "shared_mapping_records": shared_records,
             "create_required": len(unmatched),
             "needs_review": len(ambiguous),
             "unmatched": len(unmatched),
@@ -151,7 +160,9 @@ def reconcile_job(job, tally):
         }
 
     matched_count = sum(1 for item in all_matches if item.get("reconciliation_status") == "Matched")
-    shared_count = sum(1 for item in all_matches if item.get("reconciliation_status") == "Shared Mapping")
+    shared_record_count = sum(
+        1 for item in all_matches if item.get("reconciliation_status") == "Shared Mapping"
+    )
     create_required_count = sum(1 for item in all_unmatched if item.get("match_status") == "Create Required")
     needs_review_count = len(all_ambiguous)
 
@@ -165,12 +176,13 @@ def reconcile_job(job, tally):
         "erp_master_count": len(job.get("erp_masters", [])),
         "exact_matches": len(all_matches),
         "matched": matched_count,
-        "shared_mapping": len(shared_buckets),
+        "shared_mappings": len(shared_buckets),
+        "shared_mapping_records": shared_record_count,
         "create_required": create_required_count,
         "needs_review": needs_review_count,
         "unmatched": create_required_count,
         "ambiguous": needs_review_count,
-        "many_to_one_erp_mappings": 1 if shared_count else 0,
+        "many_to_one_erp_mappings": len(shared_buckets),
         "latency_ms": round(total_latency, 1),
         "by_object_type": type_summary,
     }
