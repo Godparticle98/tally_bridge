@@ -389,7 +389,7 @@ def get_dashboard(connection: str | None = None):
     latest = frappe.get_all(
         "Tally Reconciliation Job",
         filters={"connection": connection},
-        fields=["name", "status", "requested_at", "completed_at", "summary_json", "matched_json", "unmatched_json", "error"],
+        fields=["name", "status", "requested_at", "completed_at", "summary_json", "matches_json", "unmatched_json", "error"],
         order_by="requested_at desc",
         limit_page_length=1,
     )
@@ -400,78 +400,6 @@ def get_dashboard(connection: str | None = None):
             summary = frappe.parse_json(latest[0].summary_json or "{}")
         except Exception:
             summary = {}
-
-    # Normalize reconciliation data across older job records. This keeps the
-    # console useful even when a job was created by an earlier Agent build.
-    if latest:
-        try:
-            matched_rows = frappe.parse_json(latest[0].matched_json or "[]")
-        except Exception:
-            matched_rows = []
-        try:
-            unmatched_rows = frappe.parse_json(latest[0].unmatched_json or "[]")
-        except Exception:
-            unmatched_rows = []
-
-        if matched_rows or unmatched_rows:
-            summary["exact_matches"] = len(matched_rows)
-            summary["matched"] = sum(
-                1 for row in matched_rows
-                if row.get("reconciliation_status", row.get("match_status")) == "Matched"
-            )
-            shared_rows = [
-                row for row in matched_rows
-                if row.get("reconciliation_status", row.get("match_status")) == "Shared Mapping"
-            ]
-            shared_buckets = {
-                (row.get("object_type"), str(row.get("tally_name", "")).strip().casefold())
-                for row in shared_rows
-            }
-            summary["shared_mappings"] = len(shared_buckets)
-            summary["shared_mapping_records"] = len(shared_rows)
-            summary["create_required"] = sum(
-                1 for row in unmatched_rows
-                if row.get("match_status") == "Create Required"
-            )
-            summary["needs_review"] = sum(
-                1 for row in unmatched_rows
-                if row.get("match_status") == "Needs Review"
-            )
-            summary["unmatched"] = summary["create_required"]
-            summary["ambiguous"] = summary["needs_review"]
-
-            by_type = {}
-            for row in matched_rows + unmatched_rows:
-                object_type = row.get("object_type") or "Unknown"
-                by_type.setdefault(object_type, {
-                    "erp_count": 0, "tally_count": 0, "exact_matches": 0,
-                    "matched": 0, "shared_mappings": 0, "shared_mapping_records": 0,
-                    "create_required": 0, "needs_review": 0
-                })
-                by_type[object_type]["erp_count"] += 1
-                status = row.get("reconciliation_status", row.get("match_status"))
-                if row in matched_rows:
-                    by_type[object_type]["exact_matches"] += 1
-                    if status == "Matched":
-                        by_type[object_type]["matched"] += 1
-                    elif status == "Shared Mapping":
-                        by_type[object_type]["shared_mapping_records"] += 1
-                elif status == "Create Required":
-                    by_type[object_type]["create_required"] += 1
-                elif status == "Needs Review":
-                    by_type[object_type]["needs_review"] += 1
-
-            for object_type, values in by_type.items():
-                shared_names = {
-                    str(row.get("tally_name", "")).strip().casefold()
-                    for row in matched_rows
-                    if row.get("object_type") == object_type
-                    and row.get("reconciliation_status", row.get("match_status")) == "Shared Mapping"
-                }
-                values["shared_mappings"] = len(shared_names)
-
-            if by_type:
-                summary["by_object_type"] = by_type
 
     queue_rows = frappe.db.sql(
         """
