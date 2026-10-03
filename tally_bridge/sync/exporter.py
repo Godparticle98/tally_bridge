@@ -101,7 +101,9 @@ def generate_period_export(job_name):
                 }
             else:
                 master_sets = referenced
-            for dt, names in master_sets.items():
+            master_order = ["UOM", "Account", "Customer", "Supplier", "Item"]
+            for dt in master_order:
+                names = master_sets.get(dt, set())
                 for name in sorted(x for x in names if x):
                     if not frappe.db.exists(dt, name):
                         continue
