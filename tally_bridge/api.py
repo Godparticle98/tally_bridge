@@ -4,6 +4,7 @@ import frappe
 from frappe import _
 
 from .sync.utils import stable_remote_id
+from .sync.masters import tally_uom_name
 
 from .sync.service import (
     build_master_create_fallback,
@@ -192,6 +193,11 @@ def pull_reconciliation(agent_id: str):
                 "source_doctype": doctype,
                 "source_name": master.name,
                 "display_name": master.get(name_field) or master.name,
+                "reconciliation_name": (
+                    tally_uom_name(frappe.get_doc(doctype, master.name))
+                    if doctype == "UOM"
+                    else master.get(name_field) or master.name
+                ),
                 "object_type": _MASTER_OBJECT_TYPES[doctype],
             })
 
