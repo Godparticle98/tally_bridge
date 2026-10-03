@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import frappe
 from frappe.utils import now_datetime
 
@@ -123,6 +125,7 @@ def on_document_event(doc, method=None):
         # Transactions are deliberately lower priority than their master
         # dependencies. This follows Tally's requirement that referenced
         # masters exist before voucher import.
+        dependency_jobs = []
         if doc.doctype in TRANSACTION_DOCTYPES:
             for dependency_doctype, dependency_name in _master_dependencies(doc):
                 if not frappe.db.exists(dependency_doctype, dependency_name):
@@ -137,18 +140,25 @@ def on_document_event(doc, method=None):
                         "status": "Synced",
                     },
                 )
-                # A transaction must never depend on a legacy Doc-ID probe.
-                # If the master has no identity yet, enqueue a CREATE using
-                # its real ERPNext display name.
                 if not identity_exists:
-                    _enqueue_snapshot(connection, dependency, "after_insert", 20)
+                    dependency_job = _enqueue_snapshot(
+                        connection, dependency, "after_insert", 20
+                    )
+                    if dependency_job:
+                        dependency_jobs.append(dependency_job)
 
-        _enqueue_snapshot(
+        queue_name = _enqueue_snapshot(
             connection,
             doc,
             event,
             mapping.get("priority") or (100 if doc.doctype in TRANSACTION_DOCTYPES else 50),
         )
+
+        if queue_name and dependency_jobs:
+            q = frappe.get_doc("Tally Sync Queue", queue_name)
+            current = json.loads(q.depends_on or "[]")
+            q.depends_on = json.dumps(sorted(set(current + dependency_jobs)))
+            q.save(ignore_permissions=True)
 
     return None
 
