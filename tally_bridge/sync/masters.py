@@ -188,6 +188,186 @@ def supplier(doc, company: str, action="Create", tally_name: str | None = None) 
     return _party_ledger(doc, company, "Sundry Creditors", display_name, action, tally_name)
 
 
+# TallyPrime UQC mappings for common ERPNext UOM names.
+# The UQC value must be the exact Tally/GST code shown in the UQC selector.
+_UQC_MAP = {
+    "nos": "NOS-NUMBERS",
+    "no": "NOS-NUMBERS",
+    "number": "NOS-NUMBERS",
+    "numbers": "NOS-NUMBERS",
+    "pc": "PCS-PIECES",
+    "pcs": "PCS-PIECES",
+    "piece": "PCS-PIECES",
+    "pieces": "PCS-PIECES",
+    "kg": "KGS-KILOGRAMS",
+    "kgs": "KGS-KILOGRAMS",
+    "kilogram": "KGS-KILOGRAMS",
+    "kilograms": "KGS-KILOGRAMS",
+    "g": "GMS-GRAMMES",
+    "gm": "GMS-GRAMMES",
+    "gms": "GMS-GRAMMES",
+    "gram": "GMS-GRAMMES",
+    "grams": "GMS-GRAMMES",
+    "mg": "MGS-MILLIGRAMMES",
+    "milligram": "MGS-MILLIGRAMMES",
+    "milligrams": "MGS-MILLIGRAMMES",
+    "m": "MTR-METERS",
+    "meter": "MTR-METERS",
+    "meters": "MTR-METERS",
+    "metre": "MTR-METERS",
+    "metres": "MTR-METERS",
+    "cm": "CMS-CENTIMETERS",
+    "centimeter": "CMS-CENTIMETERS",
+    "centimeters": "CMS-CENTIMETERS",
+    "centimetre": "CMS-CENTIMETERS",
+    "centimetres": "CMS-CENTIMETERS",
+    "mm": "MMT-MILLIMETERS",
+    "millimeter": "MMT-MILLIMETERS",
+    "millimeters": "MMT-MILLIMETERS",
+    "millimetre": "MMT-MILLIMETERS",
+    "millimetres": "MMT-MILLIMETERS",
+    "km": "KME-KILOMETRE",
+    "kilometer": "KME-KILOMETRE",
+    "kilometers": "KME-KILOMETRE",
+    "kilometre": "KME-KILOMETRE",
+    "kilometres": "KME-KILOMETRE",
+    "l": "LTR-LITRES",
+    "ltr": "LTR-LITRES",
+    "liter": "LTR-LITRES",
+    "liters": "LTR-LITRES",
+    "litre": "LTR-LITRES",
+    "litres": "LTR-LITRES",
+    "ml": "MLT-MILILITRE",
+    "milliliter": "MLT-MILILITRE",
+    "milliliters": "MLT-MILILITRE",
+    "millilitre": "MLT-MILILITRE",
+    "millilitres": "MLT-MILILITRE",
+    "sq ft": "SQF-SQUARE FEET",
+    "square foot": "SQF-SQUARE FEET",
+    "square feet": "SQF-SQUARE FEET",
+    "sq m": "SQM-SQUARE METERS",
+    "square meter": "SQM-SQUARE METERS",
+    "square meters": "SQM-SQUARE METERS",
+    "square metre": "SQM-SQUARE METERS",
+    "square metres": "SQM-SQUARE METERS",
+    "sq yd": "SQY-SQUARE YARDS",
+    "square yard": "SQY-SQUARE YARDS",
+    "square yards": "SQY-SQUARE YARDS",
+    "yard": "YDS-YARDS",
+    "yards": "YDS-YARDS",
+    "foot": "FOT-FOOT",
+    "feet": "FOT-FOOT",
+    "inch": "INH-INCHES",
+    "inches": "INH-INCHES",
+    "cubic meter": "CBM-CUBIC METERS",
+    "cubic meters": "CBM-CUBIC METERS",
+    "cubic metre": "CBM-CUBIC METERS",
+    "cubic metres": "CBM-CUBIC METERS",
+    "cubic centimeter": "CCM-CUBIC CENTIMETERS",
+    "cubic centimeters": "CCM-CUBIC CENTIMETERS",
+    "cubic inch": "CIN-CUBIC INCHES",
+    "cubic inches": "CIN-CUBIC INCHES",
+    "ton": "TON-TONNES",
+    "tons": "TON-TONNES",
+    "tonne": "TON-TONNES",
+    "tonnes": "TON-TONNES",
+    "quintal": "QTL-QUINTALS",
+    "quintals": "QTL-QUINTALS",
+    "dozen": "DOZ-DOZENS",
+    "pair": "PRS-PAIRS",
+    "pairs": "PRS-PAIRS",
+    "box": "BOX-BOXES",
+    "boxes": "BOX-BOXES",
+    "set": "SET-SETS",
+    "sets": "SET-SETS",
+}
+
+import hashlib
+import re
+
+
+def _uom_key(value) -> str:
+    return " ".join(str(value or "").strip().casefold().split())
+
+
+def _clean_formal_name(value) -> str:
+    """Return a Tally-safe formal name: letters/numbers/spaces only."""
+    value = re.sub(r"[^A-Za-z0-9 ]+", " ", str(value or ""))
+    value = " ".join(value.split())
+    return value or "Unit"
+
+
+def _alpha_hash(value, length=3) -> str:
+    digest = hashlib.sha1(str(value).encode("utf-8")).digest()
+    return "".join(chr(ord("A") + (byte % 26)) for byte in digest[:length])
+
+
+def _uom_symbol(value) -> str:
+    """Generate a deterministic 3-8 letter Tally symbol for an ERPNext UOM."""
+    key = _uom_key(value)
+    if key in _UQC_MAP:
+        return _UQC_MAP[key].split("-", 1)[0]
+
+    words = re.findall(r"[A-Za-z]+", str(value or "").upper())
+    initials = "".join(word[0] for word in words)
+    if len(initials) < 3:
+        letters = "".join(words)
+        initials = (letters + "UOM")[:3]
+    initials = initials[:5]
+    # Always append alphabetic entropy for non-standard units. This prevents
+    # collisions such as Ounce/Gallon (US) vs Ounce/Gallon (UK) while keeping
+    # the symbol within GST/Tally's 3-8 alphabetic-character constraint.
+    symbol = (initials + _alpha_hash(value, 3))[:8]
+    return symbol if len(symbol) >= 3 else "UOM"
+
+
+def _uom_uqc(value) -> str:
+    key = _uom_key(value)
+    return _UQC_MAP.get(key, "OTH-OTHERS")
+
+
+def _uom_definition(doc):
+    original = getattr(doc, "uom_name", None) or getattr(doc, "name", None) or str(doc)
+    symbol = _uom_symbol(original)
+    formal = _clean_formal_name(original)
+    if formal.casefold() == symbol.casefold():
+        formal = f"{formal} Unit"
+    whole = getattr(doc, "must_be_whole_number", None)
+    decimal_places = getattr(doc, "decimal_places", None)
+    if decimal_places is not None:
+        try:
+            decimal_places = max(0, min(4, int(decimal_places)))
+        except (TypeError, ValueError):
+            decimal_places = None
+    if decimal_places is None:
+        decimal_places = 0 if whole else 4
+    return {
+        "source_name": original,
+        "symbol": symbol,
+        "formal_name": formal,
+        "uqc": _uom_uqc(original),
+        "decimal_places": decimal_places,
+    }
+
+
+def tally_uom_name(doc):
+    return _uom_definition(doc)["symbol"]
+
+
+def _identity_tally_name(connection_name, source_doctype, source_name):
+    if not connection_name:
+        return None
+    return frappe.db.get_value(
+        "Tally Master Identity",
+        {
+            "connection": connection_name,
+            "source_doctype": source_doctype,
+            "source_name": source_name,
+        },
+        "tally_name",
+    )
+
+
 def item(doc, company: str, action="Create", tally_name: str | None = None) -> str:
     display_name = getattr(doc, "item_name", None) or doc.name
     target_name = tally_name or display_name
@@ -198,25 +378,47 @@ def item(doc, company: str, action="Create", tally_name: str | None = None) -> s
     _text(names, "NAME", display_name)
     remote = stable_remote_id(frappe.local.site, doc.doctype, doc.name)
     _text(names, "NAME", remote)
-    if getattr(doc, "stock_uom", None):
-        _text(stock_item, "BASEUNITS", doc.stock_uom)
+
+    stock_uom = getattr(doc, "stock_uom", None)
+    if stock_uom:
+        # Prefer the persisted ERPNext -> Tally identity. During initial
+        # provisioning, fall back to the same deterministic symbol used by
+        # the UOM renderer, so the Item can reference the Unit correctly.
+        tally_uom = _identity_tally_name(
+            getattr(frappe.flags, "tally_bridge_connection", None),
+            "UOM",
+            stock_uom,
+        )
+        if not tally_uom:
+            tally_uom = _uom_symbol(stock_uom)
+        _text(stock_item, "BASEUNITS", tally_uom)
+
     return _envelope([m], company, remote)
 
 
 def uom(doc, company: str, action="Create", tally_name: str | None = None) -> str:
-    display_name = getattr(doc, "name", None) or doc.name
-    target_name = tally_name or display_name
+    definition = _uom_definition(doc)
+    target_name = tally_name or definition["symbol"]
+
     m = Element("TALLYMESSAGE", {"xmlns:UDF": "TallyUDF"})
     unit = SubElement(m, "UNIT", {"NAME": target_name, "ACTION": action.upper()})
-    # Tally requires NAME as the master field inside UNIT. The NAME attribute
-    # alone is not sufficient and results in "Master name is missing".
-    _text(unit, "NAME", display_name)
+
+    # Tally treats NAME as the unit Symbol. It is also required inside the
+    # UNIT object; sending only the XML attribute causes "Master name is missing".
+    _text(unit, "NAME", definition["symbol"])
     _text(unit, "ISSIMPLEUNIT", "Yes")
-    _text(unit, "ORIGINALNAME", display_name)
-    _text(unit, "DECIMALPLACES", "2")
+    _text(unit, "ORIGINALNAME", definition["formal_name"])
+    _text(unit, "DECIMALPLACES", definition["decimal_places"])
+
+    # TallyPrime's GST/UQC fields are represented by GSTREPUOM. For Release
+    # 3.x+ also write Reporting UQC history, matching Tally's current schema.
+    _text(unit, "GSTREPUOM", definition["uqc"])
+    reporting = SubElement(unit, "REPORTINGUQCDETAILS.LIST")
+    _text(reporting, "APPLICABLEFROM", _effective_date(doc))
+    _text(reporting, "REPORTINGUQCNAME", definition["uqc"])
+
     remote = stable_remote_id(frappe.local.site, doc.doctype, doc.name)
     return _envelope([m], company, remote)
-
 
 def _account_parent(doc) -> str:
     root = (getattr(doc, "root_type", "") or "").lower()
