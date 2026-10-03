@@ -208,6 +208,9 @@ def uom(doc, company: str, action="Create", tally_name: str | None = None) -> st
     target_name = tally_name or display_name
     m = Element("TALLYMESSAGE", {"xmlns:UDF": "TallyUDF"})
     unit = SubElement(m, "UNIT", {"NAME": target_name, "ACTION": action.upper()})
+    # Tally requires NAME as the master field inside UNIT. The NAME attribute
+    # alone is not sufficient and results in "Master name is missing".
+    _text(unit, "NAME", display_name)
     _text(unit, "ISSIMPLEUNIT", "Yes")
     _text(unit, "ORIGINALNAME", display_name)
     _text(unit, "DECIMALPLACES", "2")
