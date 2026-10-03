@@ -1,4 +1,4 @@
-frappe.pages["tally_bridge_console"].on_page_load = function(wrapper) {
+frappe.pages["tally-bridge-console"].on_page_load = function(wrapper) {
     new TallyBridgeConsole(wrapper);
 };
 
