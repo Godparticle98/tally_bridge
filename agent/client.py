@@ -15,7 +15,10 @@ class FrappeClient:
             f"{self.base_url}/api/method/tally_bridge.api.pull_next_job",
             json={"agent_id": agent_id}, headers=self.headers, timeout=self.timeout, verify=self.verify_tls,
         )
-        r.raise_for_status()
+        if not r.ok:
+            raise RuntimeError(
+                f"Frappe API {r.status_code}: {r.text[:5000]}"
+            )
         return r.json()["message"]["job"]
 
     def ack(self, queue_name, success, tally_response="", http_status=0, latency_ms=0, error=None):
