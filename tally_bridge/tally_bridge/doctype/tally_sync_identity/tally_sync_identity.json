@@ -1,0 +1,96 @@
+{
+  "doctype": "DocType",
+  "name": "Tally Sync Identity",
+  "module": "tally_bridge",
+  "field_order": [
+    "connection",
+    "source_doctype",
+    "source_name",
+    "object_type",
+    "tally_name",
+    "remote_id",
+    "status",
+    "last_synced_modified",
+    "last_synced_hash"
+  ],
+  "fields": [
+    {
+      "fieldname": "connection",
+      "fieldtype": "Link",
+      "options": "Tally Connection Settings",
+      "label": "Connection",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "source_doctype",
+      "fieldtype": "Link",
+      "options": "DocType",
+      "label": "Source DocType",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "source_name",
+      "fieldtype": "Data",
+      "label": "ERPNext Document ID",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "object_type",
+      "fieldtype": "Select",
+      "options": "Ledger\nStock Item\nUnit",
+      "label": "Tally Object",
+      "reqd": 1
+    },
+    {
+      "fieldname": "tally_name",
+      "fieldtype": "Data",
+      "label": "Tally Name",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "remote_id",
+      "fieldtype": "Data",
+      "label": "ERPNext Remote ID"
+    },
+    {
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "options": "Active\nMissing\nConflict",
+      "label": "Status",
+      "default": "Active",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "last_synced_modified",
+      "fieldtype": "Datetime",
+      "label": "Last Synced Modified"
+    },
+    {
+      "fieldname": "last_synced_hash",
+      "fieldtype": "Data",
+      "label": "Last Synced Hash"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    },
+    {
+      "role": "Tally Bridge Agent",
+      "read": 1,
+      "write": 1,
+      "create": 1
+    }
+  ],
+  "engine": "InnoDB",
+  "sort_field": "modified",
+  "sort_order": "DESC"
+}
