@@ -44,7 +44,7 @@ def main():
                 probe = job.get("master_probe")
                 if probe:
                     exists, probe_latency, probe_response = tally.master_exists(
-                        probe["name"], probe["object_type"]
+                        probe["name"], probe["object_type"], probe.get("company")
                     )
                     if exists is None:
                         error = f"Tally master existence probe failed: {probe_response[:2000]}"
