@@ -53,7 +53,7 @@ class FrappeClient:
     def ack_reconciliation(self, job_name, success, summary_json, matches_json, unmatched_json, error=""):
         r = requests.post(
             f"{self.base_url}/api/method/tally_bridge.api.ack_reconciliation",
-            headers=self._headers(),
+            headers=self.headers,
             json={
                 "job_name": job_name,
                 "success": int(success),
