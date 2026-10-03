@@ -88,3 +88,17 @@ def create_period_export(connection: str, from_date: str, to_date: str, include_
     }).insert(ignore_permissions=True)
     frappe.enqueue("tally_bridge.sync.exporter.generate_period_export", job_name=job.name, queue="long", enqueue_after_commit=True)
     return {"job": job.name}
+
+
+@frappe.whitelist(methods=["POST"])
+def reconcile_masters(connection: str):
+    """Create a reconciliation job; the Windows Agent performs the Tally pull."""
+    _check_agent()
+    job = frappe.get_doc({
+        "doctype": "Tally Reconciliation Job",
+        "connection": connection,
+        "status": "Queued",
+        "requested_at": frappe.utils.now_datetime(),
+    }).insert(ignore_permissions=True)
+    frappe.db.commit()
+    return {"job": job.name}
