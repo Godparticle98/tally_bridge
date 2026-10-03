@@ -68,7 +68,7 @@ def generate_period_export(job_name):
         referenced = {"Customer": set(), "Supplier": set(), "Item": set(), "UOM": set(), "Account": set()}
         for doc in docs:
             action = "Create"
-            xml = render_document(doc, connection.tally_company_name, action)
+            xml = render_document(doc, connection.tally_company_name, action, connection=connection.name)
             transaction_messages.extend(_messages_from_envelope(xml))
             if doc.doctype == "Sales Invoice":
                 referenced["Customer"].add(doc.customer)
