@@ -9,6 +9,7 @@
     "source_doctype",
     "source_name",
     "event",
+    "depends_on",
     "source_modified",
     "payload_hash",
     "payload_json",
@@ -29,7 +30,7 @@
       "fieldname": "status",
       "fieldtype": "Select",
       "label": "Status",
-      "options": "Queued\nProcessing\nSuccess\nRetry\nFailed",
+      "options": "Queued\nBlocked\nProcessing\nSuccess\nRetry\nFailed",
       "default": "Queued",
       "in_list_view": 1
     },
@@ -69,6 +70,11 @@
       "fieldtype": "Data",
       "label": "Event",
       "reqd": 1
+    },
+    {
+      "fieldname": "depends_on",
+      "fieldtype": "Long Text",
+      "label": "Depends On Queue Jobs"
     },
     {
       "fieldname": "source_modified",
