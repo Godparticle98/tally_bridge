@@ -1,0 +1,16 @@
+{
+  "doctype":"DocType","name":"Tally Reconciliation Job","module":"tally_bridge",
+  "field_order":["connection","status","requested_at","completed_at","summary_json","matches_json","unmatched_json","error"],
+  "fields":[
+    {"fieldname":"connection","fieldtype":"Link","options":"Tally Connection Settings","label":"Connection","reqd":1,"in_list_view":1},
+    {"fieldname":"status","fieldtype":"Select","options":"Queued\nProcessing\nCompleted\nFailed","default":"Queued","reqd":1,"in_list_view":1},
+    {"fieldname":"requested_at","fieldtype":"Datetime","label":"Requested At"},
+    {"fieldname":"completed_at","fieldtype":"Datetime","label":"Completed At"},
+    {"fieldname":"summary_json","fieldtype":"Long Text","label":"Summary JSON"},
+    {"fieldname":"matches_json","fieldtype":"Long Text","label":"Matches JSON"},
+    {"fieldname":"unmatched_json","fieldtype":"Long Text","label":"Unmatched JSON"},
+    {"fieldname":"error","fieldtype":"Long Text","label":"Error"}
+  ],
+  "permissions":[{"role":"System Manager","read":1,"write":1,"create":1,"delete":1}],
+  "engine":"InnoDB","sort_field":"modified","sort_order":"DESC"
+}
