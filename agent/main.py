@@ -66,10 +66,14 @@ def main():
     agent_id = cfg["agent_id"]
 
     log.info("Tally Bridge Agent started: %s", agent_id)
+    log.info("Frappe endpoint: %s", cfg["frappe_base_url"])
+    log.info("Tally endpoint: %s", cfg.get("tally_url", "http://127.0.0.1:9000"))
+    log.info("Poll interval: %.1fs", poll)
     while True:
         try:
             reconciliation = frappe.pull_reconciliation(agent_id)
             if reconciliation:
+                log.info("Reconciliation job received: %s", reconciliation.get("name"))
                 try:
                     summary, matches, unmatched = reconcile_job(reconciliation, tally)
                     frappe.ack_reconciliation(
@@ -90,6 +94,7 @@ def main():
 
             job = frappe.pull_job(agent_id)
             if not job:
+                log.info("No reconciliation job and no sync job; sleeping %.1fs", poll)
                 time.sleep(poll)
                 continue
 
@@ -128,8 +133,8 @@ def main():
             except Exception as exc:
                 log.exception("Tally call failed")
                 frappe.ack(job["name"], False, "", 0, 0, str(exc))
-        except Exception:
-            log.exception("Agent loop failure")
+        except Exception as exc:
+            log.exception("Agent loop failure: %s", exc)
             time.sleep(min(poll * 5, 15))
 
 
