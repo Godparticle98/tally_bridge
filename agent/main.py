@@ -74,20 +74,34 @@ def _match_collection(erp_masters, tally_objects):
     for master in erp_masters:
         candidates = tally_objects.get(_norm(master["display_name"]), [])
         if len(candidates) == 1:
-            matches.append({**master, "tally_name": candidates[0], "match_type": "Exact Name"})
+            matches.append({
+                **master,
+                "tally_name": candidates[0],
+                "match_type": "Exact Name",
+            })
         elif len(candidates) > 1:
-            ambiguous.append({**master, "candidates": candidates})
+            ambiguous.append({
+                **master,
+                "match_status": "Needs Review",
+                "candidates": candidates,
+            })
         else:
-            unmatched.append(master)
-    return matches, unmatched, ambiguous
+            unmatched.append({
+                **master,
+                "match_status": "Create Required",
+            })
 
-
-def _count_many_to_one(matches):
     buckets = {}
     for match in matches:
         key = (match["object_type"], _norm(match["tally_name"]))
-        buckets[key] = buckets.get(key, 0) + 1
-    return sum(1 for count in buckets.values() if count > 1)
+        buckets.setdefault(key, []).append(match)
+
+    for bucket in buckets.values():
+        status = "Shared Mapping" if len(bucket) > 1 else "Matched"
+        for match in bucket:
+            match["reconciliation_status"] = status
+
+    return matches, unmatched, ambiguous
 
 
 def reconcile_job(job, tally):
@@ -127,17 +141,30 @@ def reconcile_job(job, tally):
             "erp_count": len(masters),
             "tally_count": sum(len(v) for v in tally_objects.values()),
             "exact_matches": len(matches),
+            "matched": sum(1 for item in matches if item.get("reconciliation_status") == "Matched"),
+            "shared_mapping": sum(1 for item in matches if item.get("reconciliation_status") == "Shared Mapping"),
+            "create_required": len(unmatched),
+            "needs_review": len(ambiguous),
             "unmatched": len(unmatched),
             "ambiguous": len(ambiguous),
             "latency_ms": round(latency, 1),
         }
 
+    matched_count = sum(1 for item in all_matches if item.get("reconciliation_status") == "Matched")
+    shared_count = sum(1 for item in all_matches if item.get("reconciliation_status") == "Shared Mapping")
+    create_required_count = sum(1 for item in all_unmatched if item.get("match_status") == "Create Required")
+    needs_review_count = len(all_ambiguous)
+
     summary = {
         "erp_master_count": len(job.get("erp_masters", [])),
         "exact_matches": len(all_matches),
-        "unmatched": len(all_unmatched),
-        "ambiguous": len(all_ambiguous),
-        "many_to_one_erp_mappings": _count_many_to_one(all_matches),
+        "matched": matched_count,
+        "shared_mapping": shared_count,
+        "create_required": create_required_count,
+        "needs_review": needs_review_count,
+        "unmatched": create_required_count,
+        "ambiguous": needs_review_count,
+        "many_to_one_erp_mappings": 1 if shared_count else 0,
         "latency_ms": round(total_latency, 1),
         "by_object_type": type_summary,
     }
