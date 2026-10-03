@@ -5,6 +5,7 @@ from xml.etree.ElementTree import Element, SubElement, tostring
 import frappe
 
 from .utils import stable_remote_id
+from .masters import tally_uom_name
 
 
 def _text(parent, tag, value):
@@ -33,6 +34,19 @@ def _master_name(connection, doctype, source_name):
         "tally_name",
     )
     return value or source_name
+
+
+def _uom_name(connection, source_uom):
+    """Resolve an ERPNext UOM to its Tally Unit symbol for voucher quantities."""
+    if not source_uom:
+        return source_uom
+    mapped = _master_name(connection, "UOM", source_uom)
+    if mapped and mapped != source_uom:
+        return mapped
+    try:
+        return tally_uom_name(frappe.get_doc("UOM", source_uom))
+    except Exception:
+        return source_uom
 
 
 def envelope(messages, company: str, request_id: str, data_id: str = "Vouchers") -> str:
@@ -104,9 +118,10 @@ def sales_invoice(doc, company: str, action: str = "Create", connection: str | N
         qty = float(item.qty or 0)
         rate = float(item.rate or 0)
         amount = float(item.amount or 0)
-        _text(inv, "ACTUALQTY", f"{qty:g} {item.stock_uom or item.uom or ''}".strip())
-        _text(inv, "BILLEDQTY", f"{qty:g} {item.stock_uom or item.uom or ''}".strip())
-        _text(inv, "RATE", f"{rate:g}/{item.stock_uom or item.uom or 'nos'}")
+        tally_uom = _uom_name(connection, item.stock_uom or item.uom)
+        _text(inv, "ACTUALQTY", f"{qty:g} {tally_uom or ''}".strip())
+        _text(inv, "BILLEDQTY", f"{qty:g} {tally_uom or ''}".strip())
+        _text(inv, "RATE", f"{rate:g}/{tally_uom or 'NOS'}")
         _text(inv, "AMOUNT", _amount(amount))
         alloc = SubElement(inv, "ACCOUNTINGALLOCATIONS.LIST")
         _text(alloc, "LEDGERNAME", _master_name(connection, "Account", item.income_account))
@@ -146,14 +161,15 @@ def purchase_invoice(doc, company: str, action: str = "Create", connection: str 
 
     for item in doc.items:
         inv = SubElement(v, "ALLINVENTORYENTRIES.LIST")
-        _text(inv, "STOCKITEMNAME", item.item_name or item.item_code)
+        _text(inv, "STOCKITEMNAME", _master_name(connection, "Item", item.item_code))
         _text(inv, "ISDEEMEDPOSITIVE", "Yes")
         qty = float(item.qty or 0)
         rate = float(item.rate or 0)
         amount = float(item.amount or 0)
-        _text(inv, "ACTUALQTY", f"{qty:g} {item.stock_uom or item.uom or ''}".strip())
-        _text(inv, "BILLEDQTY", f"{qty:g} {item.stock_uom or item.uom or ''}".strip())
-        _text(inv, "RATE", f"{rate:g}/{item.stock_uom or item.uom or 'nos'}")
+        tally_uom = _uom_name(connection, item.stock_uom or item.uom)
+        _text(inv, "ACTUALQTY", f"{qty:g} {tally_uom or ''}".strip())
+        _text(inv, "BILLEDQTY", f"{qty:g} {tally_uom or ''}".strip())
+        _text(inv, "RATE", f"{rate:g}/{tally_uom or 'NOS'}")
         _text(inv, "AMOUNT", _amount(-amount))
         alloc = SubElement(inv, "ACCOUNTINGALLOCATIONS.LIST")
         _text(alloc, "LEDGERNAME", _master_name(connection, "Account", item.expense_account))
