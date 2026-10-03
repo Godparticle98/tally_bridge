@@ -56,8 +56,14 @@ def pull_next_job(agent_id: str):
         if not _master_identity(q.connection, q.source_doctype, q.source_name):
             fallback_payload = build_master_create_fallback(q)
             connection = frappe.get_doc("Tally Connection Settings", q.connection)
+            display_field = _MASTER_DISPLAY_FIELDS[q.source_doctype]
+            tally_master_name = frappe.db.get_value(
+                q.source_doctype,
+                q.source_name,
+                display_field,
+            ) or q.source_name
             master_probe = {
-                "name": q.source_name,
+                "name": tally_master_name,
                 "object_type": _MASTER_OBJECT_TYPES[q.source_doctype],
                 "company": connection.tally_company_name,
             }
