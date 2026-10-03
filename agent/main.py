@@ -155,11 +155,17 @@ def reconcile_job(job, tally):
     create_required_count = sum(1 for item in all_unmatched if item.get("match_status") == "Create Required")
     needs_review_count = len(all_ambiguous)
 
+    shared_buckets = {}
+    for item in all_matches:
+        if item.get("reconciliation_status") == "Shared Mapping":
+            key = (item["object_type"], _norm(item["tally_name"]))
+            shared_buckets[key] = True
+
     summary = {
         "erp_master_count": len(job.get("erp_masters", [])),
         "exact_matches": len(all_matches),
         "matched": matched_count,
-        "shared_mapping": shared_count,
+        "shared_mapping": len(shared_buckets),
         "create_required": create_required_count,
         "needs_review": needs_review_count,
         "unmatched": create_required_count,
