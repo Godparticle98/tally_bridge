@@ -362,3 +362,76 @@ def provision_reconciled_masters(
         "queued_items": created,
         "skipped_items": skipped,
     }
+
+@frappe.whitelist(methods=["GET", "POST"])
+def get_dashboard(connection: str | None = None):
+    """Return compact data for the Tally Bridge console."""
+    _check_agent()
+
+    if not connection:
+        connection = frappe.db.get_value(
+            "Tally Connection Settings",
+            {"enabled": 1},
+            "name",
+            order_by="modified desc",
+        )
+
+    if not connection:
+        return {"connection": None, "connections": [], "reconciliation": None, "queue": {}}
+
+    connections = frappe.get_all(
+        "Tally Connection Settings",
+        fields=["name", "erpnext_company", "tally_company_name", "tally_url", "enabled"],
+        order_by="modified desc",
+        limit_page_length=100,
+    )
+
+    latest = frappe.get_all(
+        "Tally Reconciliation Job",
+        filters={"connection": connection},
+        fields=["name", "status", "requested_at", "completed_at", "summary_json", "error"],
+        order_by="requested_at desc",
+        limit_page_length=1,
+    )
+
+    summary = {}
+    if latest and latest[0].summary_json:
+        try:
+            summary = frappe.parse_json(latest[0].summary_json or "{}")
+        except Exception:
+            summary = {}
+
+    queue_rows = frappe.db.sql(
+        """
+        SELECT status, COUNT(*) AS count
+        FROM \`tabTally Sync Queue\`
+        WHERE connection=%(connection)s
+        GROUP BY status
+        """,
+        {"connection": connection},
+        as_dict=True,
+    )
+    queue = {row.status: int(row.count) for row in queue_rows}
+
+    identity_rows = frappe.db.sql(
+        """
+        SELECT object_type, status, COUNT(*) AS count
+        FROM \`tabTally Master Identity\`
+        WHERE connection=%(connection)s
+        GROUP BY object_type, status
+        """,
+        {"connection": connection},
+        as_dict=True,
+    )
+    identities = {}
+    for row in identity_rows:
+        identities.setdefault(row.object_type, {})[row.status] = int(row.count)
+
+    return {
+        "connection": connection,
+        "connections": connections,
+        "reconciliation": latest[0] if latest else None,
+        "summary": summary,
+        "queue": queue,
+        "identities": identities,
+    }
