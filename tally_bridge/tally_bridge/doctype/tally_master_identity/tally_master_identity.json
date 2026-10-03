@@ -82,10 +82,6 @@
       "write": 1,
       "create": 1,
       "delete": 1
-    },
-    {
-      "role": "Tally Bridge Agent",
-      "read": 1
     }
   ],
   "engine": "InnoDB",
