@@ -31,11 +31,23 @@ def pull_next_job(agent_id: str):
         return {"job": None}
     payload = build_tally_payload(q)
     fallback_payload = None
+    master_probe = None
 
     master_doctypes = {"Customer", "Supplier", "Item", "UOM", "Account"}
     if q.source_doctype in master_doctypes and q.event in {"on_update", "on_update_after_submit"}:
         if not _master_identity(q.connection, q.source_doctype, q.source_name):
             fallback_payload = build_master_create_fallback(q)
+            object_type = {
+                "Customer": "Ledger",
+                "Supplier": "Ledger",
+                "Account": "Ledger",
+                "Item": "Stock Item",
+                "UOM": "Unit",
+            }[q.source_doctype]
+            master_probe = {
+                "name": q.source_name,
+                "object_type": object_type,
+            }
 
     return {
         "job": {
@@ -46,6 +58,7 @@ def pull_next_job(agent_id: str):
             "event": q.event,
             "payload_xml": payload,
             "fallback_payload_xml": fallback_payload,
+            "master_probe": master_probe,
             "attempts": q.attempts,
         }
     }
