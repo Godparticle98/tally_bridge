@@ -323,9 +323,22 @@ def provision_reconciled_masters(
         doctype = row["source_doctype"]
         name = row["source_name"]
 
-        if _master_identity(connection, doctype, name):
-            skipped.append({"source_doctype": doctype, "source_name": name, "reason": "Identity already exists"})
-            continue
+        # The reconciliation result is authoritative for this provisioning run.
+        # If it says Create Required, any older identity may be stale (for example
+        # a previous Agent version could have acknowledged HTTP 200 even when
+        # Tally returned an import error). Do not let such an identity suppress
+        # provisioning; remove the stale link and retry the master.
+        identity = _master_identity(connection, doctype, name)
+        if identity:
+            try:
+                frappe.delete_doc(
+                    "Tally Master Identity",
+                    identity["name"],
+                    ignore_permissions=True,
+                    force=True,
+                )
+            except Exception:
+                pass
 
         try:
             doc = frappe.get_doc(doctype, name)
@@ -334,6 +347,24 @@ def provision_reconciled_masters(
             continue
 
         queue_name = _enqueue_snapshot(connection_doc, doc, "after_insert", priority.get(doctype, 50))
+
+        # A previous failed/false-success queue row can also suppress a retry
+        # because _enqueue_snapshot is idempotent. For an explicitly
+        # Create-Required master, reset that row back to Queued.
+        existing_queue = frappe.get_doc("Tally Sync Queue", queue_name) if queue_name else None
+        if existing_queue and existing_queue.status in {"Success", "Failed", "Blocked"}:
+            existing_queue.status = "Queued"
+            existing_queue.attempts = 0
+            existing_queue.next_attempt_at = None
+            existing_queue.last_error = None
+            existing_queue.last_tally_response = None
+            existing_queue.last_http_status = None
+            existing_queue.completed_at = None
+            existing_queue.claimed_by = None
+            existing_queue.claimed_at = None
+            existing_queue.lease_until = None
+            existing_queue.save(ignore_permissions=True)
+
         if queue_name:
             created.append({"queue": queue_name, "source_doctype": doctype, "source_name": name})
         else:
