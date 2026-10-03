@@ -72,3 +72,39 @@ class TallyClient:
             return True, elapsed, response.text
 
         return False, elapsed, response.text
+
+
+    def export_ledgers(self, company=None):
+        """Export Tally ledger masters as XML for reconciliation."""
+        company_tag = f"<SVCURRENTCOMPANY>{company}</SVCURRENTCOMPANY>" if company else ""
+        payload = f"""<?xml version="1.0" encoding="UTF-8"?>
+<ENVELOPE>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>EXPORT</TALLYREQUEST>
+    <TYPE>COLLECTION</TYPE>
+    <ID>Ledger</ID>
+  </HEADER>
+  <BODY>
+    <DESC>
+      <STATICVARIABLES>
+        <SVEXPORTFORMAT>$SysName:XML</SVEXPORTFORMAT>
+        {company_tag}
+      </STATICVARIABLES>
+    </DESC>
+  </BODY>
+</ENVELOPE>"""
+        start = time.perf_counter()
+        try:
+            response = requests.post(
+                self.base_url,
+                data=payload.encode("utf-8"),
+                headers={"Content-Type": "text/xml; charset=utf-8"},
+                timeout=self.timeout,
+            )
+        except Exception as exc:
+            return None, (time.perf_counter() - start) * 1000, str(exc)
+        elapsed = (time.perf_counter() - start) * 1000
+        if response.status_code != 200:
+            return None, elapsed, response.text
+        return response.text, elapsed, None
