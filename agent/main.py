@@ -71,7 +71,9 @@ def main():
     log.info("Poll interval: %.1fs", poll)
     while True:
         try:
+            log.info("Polling reconciliation queue...")
             reconciliation = frappe.pull_reconciliation(agent_id)
+            log.info("Reconciliation poll returned: %s", "job" if reconciliation else "none")
             if reconciliation:
                 log.info("Reconciliation job received: %s", reconciliation.get("name"))
                 try:
