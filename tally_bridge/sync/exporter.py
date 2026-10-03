@@ -48,8 +48,8 @@ def _query_docs(doctype, company, from_date, to_date):
     return [frappe.get_doc(doctype, n) for n in names]
 
 
-def generate_period_export(job_name):
-    job = frappe.get_doc("Tally Export Job", job_name)
+def generate_period_export(export_job_name):
+    job = frappe.get_doc("Tally Export Job", export_job_name)
     connection = frappe.get_doc("Tally Connection Settings", job.connection)
     job.status = "Processing"
     job.started_at = now_datetime()
