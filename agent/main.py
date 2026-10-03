@@ -262,9 +262,18 @@ def main():
                 error = None if success else (result.get("message") or response[:2000])
                 frappe.ack(job["name"], success, response, status, total_latency, error)
                 if success:
-                    log.info("Tally accepted %s in %.1f ms", job["name"], total_latency)
+                    log.info(
+                        "Tally import succeeded %s in %.1f ms: created=%s altered=%s cancelled=%s",
+                        job["name"], total_latency, result.get("created", 0),
+                        result.get("altered", 0), result.get("cancelled", 0),
+                    )
                 else:
-                    log.error("Tally rejected %s: %s", job["name"], error)
+                    log.error(
+                        "Tally import FAILED %s (HTTP %s): created=%s altered=%s errors=%s exceptions=%s: %s",
+                        job["name"], status, result.get("created", 0),
+                        result.get("altered", 0), result.get("errors", 0),
+                        result.get("exceptions", 0), error,
+                    )
             except Exception as exc:
                 log.exception("Tally call failed")
                 frappe.ack(job["name"], False, "", 0, 0, str(exc))
