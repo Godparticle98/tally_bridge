@@ -7,7 +7,7 @@ import frappe
 from frappe.utils import now_datetime
 
 from .renderer import render_document
-from .masters import render_master
+from .masters import render_master, tally_uom_name
 from .utils import canonical_json, stable_remote_id
 
 
@@ -248,12 +248,16 @@ def build_tally_payload(queue_doc):
             action = "Create"
             tally_name = None
 
-        return render_master(
-            doc,
-            company=connection.tally_company_name,
-            action=action,
-            tally_name=tally_name,
-        )
+        frappe.flags.tally_bridge_connection = connection.name
+        try:
+            return render_master(
+                doc,
+                company=connection.tally_company_name,
+                action=action,
+                tally_name=tally_name,
+            )
+        finally:
+            frappe.flags.pop("tally_bridge_connection", None)
 
     return render_document(
         doc,
@@ -278,7 +282,11 @@ def build_master_create_fallback(queue_doc):
     mapping = frappe.get_doc("Tally DocType Mapping", mapping_name)
     if mapping.object_type not in {"Ledger", "Stock Item", "Unit"}:
         return None
-    return render_master(doc, company=connection.tally_company_name, action="Create", tally_name=None)
+    frappe.flags.tally_bridge_connection = connection.name
+    try:
+        return render_master(doc, company=connection.tally_company_name, action="Create", tally_name=None)
+    finally:
+        frappe.flags.pop("tally_bridge_connection", None)
 
 
 def _upsert_master_identity(q, success: bool):
@@ -296,13 +304,14 @@ def _upsert_master_identity(q, success: bool):
 
     connection = frappe.get_doc("Tally Connection Settings", q.connection)
     display_name = _master_display_name(doc)
+    tally_name = tally_uom_name(doc) if source_doctype == "UOM" else display_name
     existing = _master_identity(q.connection, source_doctype, q.source_name)
     source_hash = q.payload_hash
     remote_id = stable_remote_id(frappe.local.site, source_doctype, q.source_name)
 
     if existing:
         identity = frappe.get_doc("Tally Master Identity", existing["name"])
-        identity.tally_name = display_name
+        identity.tally_name = tally_name
         identity.stable_remote_id = remote_id
         identity.last_source_hash = source_hash
         identity.last_synced_at = now_datetime()
@@ -317,7 +326,7 @@ def _upsert_master_identity(q, success: bool):
             "source_doctype": source_doctype,
             "source_name": q.source_name,
             "object_type": _master_object_type(source_doctype),
-            "tally_name": display_name,
+            "tally_name": tally_name,
             "stable_remote_id": remote_id,
             "last_source_hash": source_hash,
             "last_synced_at": now_datetime(),
