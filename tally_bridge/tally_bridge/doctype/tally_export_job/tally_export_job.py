@@ -46,8 +46,8 @@ class TallyExportJob(Document):
 
         frappe.enqueue(
             "tally_bridge.sync.exporter.generate_period_export",
-            job_name=self.name,
             queue="long",
+            kwargs={"job_name": self.name},
             enqueue_after_commit=True,
         )
         return {"job": self.name, "status": "Queued"}
