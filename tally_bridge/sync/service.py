@@ -249,7 +249,7 @@ def _load_queue_snapshot(queue_doc):
 
 def build_tally_payload(queue_doc):
     connection = frappe.get_doc("Tally Connection Settings", queue_doc.connection)
-    snapshot = json.loads(queue_doc.payload_json)
+    snapshot = _load_queue_snapshot(queue_doc)
     doc = frappe.get_doc(snapshot)
     action = (
         "Cancel"
@@ -307,7 +307,7 @@ def build_tally_payload(queue_doc):
 def build_master_create_fallback(queue_doc):
     """Build a CREATE payload for a master whose legacy ALTER target is absent."""
     connection = frappe.get_doc("Tally Connection Settings", queue_doc.connection)
-    snapshot = json.loads(queue_doc.payload_json)
+    snapshot = _load_queue_snapshot(queue_doc)
     doc = frappe.get_doc(snapshot)
     mapping_name = frappe.db.get_value(
         "Tally DocType Mapping",
