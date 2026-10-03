@@ -176,7 +176,12 @@ def build_tally_payload(queue_doc):
             tally_name=tally_name,
         )
 
-    return render_document(doc, company=connection.tally_company_name, action=action)
+    return render_document(
+        doc,
+        company=connection.tally_company_name,
+        action=action,
+        connection=connection.name,
+    )
 
 
 def build_master_create_fallback(queue_doc):
