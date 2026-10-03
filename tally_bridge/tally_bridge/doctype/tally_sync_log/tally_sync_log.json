@@ -90,10 +90,18 @@
   "permissions": [
     {
       "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    },
+    {
+      "role": "Tally Bridge Agent",
       "read": 1
     }
   ],
   "engine": "InnoDB",
   "sort_field": "created_on",
-  "sort_order": "DESC"
+  "sort_order": "DESC",
+  "actions": {}
 }
