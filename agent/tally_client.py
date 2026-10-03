@@ -20,7 +20,6 @@ class TallyClient:
         elapsed = (time.perf_counter() - start) * 1000
         return r.status_code, r.text, elapsed
 
-
     def master_exists(self, name, object_type="Ledger", company=None):
         """Return (exists, latency_ms, response_xml). exists=None means the probe failed."""
         company_tag = f"<SVCURRENTCOMPANY>{company}</SVCURRENTCOMPANY>" if company else ""
@@ -67,27 +66,20 @@ class TallyClient:
         except ET.ParseError:
             return None, elapsed, response.text
 
-        tag = object_type.upper()
-        if root.find(f".//{tag}") is not None:
-            return True, elapsed, response.text
+        tag = object_type.upper().replace(" ", "")
+        return root.find(f".//{tag}") is not None, elapsed, response.text
 
-        return False, elapsed, response.text
-
-
-    def export_ledgers(self, company=None):
-        """Export the complete Ledger collection from TallyPrime.
-
-        Tally's collection export requires the collection to be defined in the
-        request when we want deterministic, complete master extraction.
-        """
+    def export_collection(self, collection_name, object_type, native_methods, company=None):
+        """Export one complete Tally master collection using inline TDL."""
         company_tag = f"<SVCURRENTCOMPANY>{company}</SVCURRENTCOMPANY>" if company else ""
+        methods = "".join(f"<NATIVEMETHOD>{method}</NATIVEMETHOD>" for method in native_methods)
         payload = f"""<?xml version="1.0" encoding="UTF-8"?>
 <ENVELOPE>
   <HEADER>
     <VERSION>1</VERSION>
     <TALLYREQUEST>EXPORT</TALLYREQUEST>
     <TYPE>COLLECTION</TYPE>
-    <ID>TallyBridgeLedgerCollection</ID>
+    <ID>{collection_name}</ID>
   </HEADER>
   <BODY>
     <DESC>
@@ -97,17 +89,9 @@ class TallyClient:
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
-          <COLLECTION NAME="TallyBridgeLedgerCollection" ISMODIFY="No" ISINITIALIZE="Yes">
-            <TYPE>Ledger</TYPE>
-            <NATIVEMETHOD>Name</NATIVEMETHOD>
-            <NATIVEMETHOD>Parent</NATIVEMETHOD>
-            <NATIVEMETHOD>IncomeTaxNumber</NATIVEMETHOD>
-            <NATIVEMETHOD>LedgerPhone</NATIVEMETHOD>
-            <NATIVEMETHOD>LedgerMobile</NATIVEMETHOD>
-            <NATIVEMETHOD>LedgerContact</NATIVEMETHOD>
-            <NATIVEMETHOD>StateName</NATIVEMETHOD>
-            <NATIVEMETHOD>PINCode</NATIVEMETHOD>
-            <NATIVEMETHOD>MailingName</NATIVEMETHOD>
+          <COLLECTION NAME="{collection_name}" ISMODIFY="No" ISINITIALIZE="Yes">
+            <TYPE>{object_type}</TYPE>
+            {methods}
           </COLLECTION>
         </TDLMESSAGE>
       </TDL>
@@ -128,3 +112,28 @@ class TallyClient:
         if response.status_code != 200:
             return None, elapsed, response.text
         return response.text, elapsed, None
+
+    def export_ledgers(self, company=None):
+        return self.export_collection(
+            "TallyBridgeLedgerCollection",
+            "Ledger",
+            ["Name", "Parent", "IncomeTaxNumber", "LedgerPhone", "LedgerMobile",
+             "LedgerContact", "StateName", "PINCode", "MailingName"],
+            company,
+        )
+
+    def export_stock_items(self, company=None):
+        return self.export_collection(
+            "TallyBridgeStockItemCollection",
+            "Stock Item",
+            ["Name", "Parent", "BaseUnits", "OpeningBalance", "OpeningRate"],
+            company,
+        )
+
+    def export_units(self, company=None):
+        return self.export_collection(
+            "TallyBridgeUnitCollection",
+            "Unit",
+            ["Name", "BaseUnits", "Conversion"],
+            company,
+        )
