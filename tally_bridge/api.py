@@ -102,3 +102,46 @@ def reconcile_masters(connection: str):
     }).insert(ignore_permissions=True)
     frappe.db.commit()
     return {"job": job.name}
+
+
+@frappe.whitelist(methods=["POST"])
+def pull_reconciliation(agent_id: str):
+    _check_agent()
+    row = frappe.db.sql(
+        """
+        SELECT name, connection FROM `tabTally Reconciliation Job`
+        WHERE status='Queued'
+        ORDER BY requested_at ASC
+        LIMIT 1
+        """,
+        as_dict=True,
+    )
+    if not row:
+        return {"job": None}
+    job = frappe.get_doc("Tally Reconciliation Job", row[0].name)
+    job.status = "Processing"
+    job.save(ignore_permissions=True)
+    frappe.db.commit()
+    connection = frappe.get_doc("Tally Connection Settings", job.connection)
+    return {
+        "job": {
+            "name": job.name,
+            "connection": job.connection,
+            "company": connection.tally_company_name,
+        }
+    }
+
+
+@frappe.whitelist(methods=["POST"])
+def ack_reconciliation(job_name: str, success: int, summary_json: str = "{}", matches_json: str = "[]", unmatched_json: str = "[]", error: str = ""):
+    _check_agent()
+    job = frappe.get_doc("Tally Reconciliation Job", job_name)
+    job.status = "Completed" if int(success) else "Failed"
+    job.summary_json = summary_json
+    job.matches_json = matches_json
+    job.unmatched_json = unmatched_json
+    job.error = error or None
+    job.completed_at = frappe.utils.now_datetime()
+    job.save(ignore_permissions=True)
+    frappe.db.commit()
+    return {"ok": True}
