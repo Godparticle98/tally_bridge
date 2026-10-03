@@ -38,13 +38,34 @@ def main():
 
             log.info("Processing %s %s/%s (%s)", job["name"], job["source_doctype"], job["source_name"], job["event"])
             try:
-                status, response, latency = tally.send_xml(job["payload_xml"])
+                probe_latency = 0.0
+                payload = job["payload_xml"]
+
+                probe = job.get("master_probe")
+                if probe:
+                    exists, probe_latency, probe_response = tally.master_exists(
+                        probe["name"], probe["object_type"]
+                    )
+                    if exists is None:
+                        error = f"Tally master existence probe failed: {probe_response[:2000]}"
+                        frappe.ack(job["name"], False, probe_response, 0, probe_latency, error)
+                        log.error("Master probe failed for %s: %s", job["name"], error)
+                        continue
+                    if not exists:
+                        payload = job.get("fallback_payload_xml") or payload
+                        log.info(
+                            "Master %s/%s is not in Tally; using CREATE instead of legacy ALTER",
+                            job["source_doctype"], probe["name"],
+                        )
+
+                status, response, latency = tally.send_xml(payload)
+                total_latency = probe_latency + latency
                 result = parse_tally_response(response)
                 success = status == 200 and result["ok"]
                 error = None if success else (result.get("message") or response[:2000])
-                frappe.ack(job["name"], success, response, status, latency, error)
+                frappe.ack(job["name"], success, response, status, total_latency, error)
                 if success:
-                    log.info("Tally accepted %s in %.1f ms", job["name"], latency)
+                    log.info("Tally accepted %s in %.1f ms", job["name"], total_latency)
                 else:
                     log.error("Tally rejected %s: %s", job["name"], error)
             except Exception as exc:
