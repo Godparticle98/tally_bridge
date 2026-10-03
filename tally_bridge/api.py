@@ -17,6 +17,23 @@ from .sync.service import (
 _ALLOWED_ROLES = {"Tally Bridge Agent", "System Manager"}
 
 
+_MASTER_OBJECT_TYPES = {
+    "Customer": "Ledger",
+    "Supplier": "Ledger",
+    "Account": "Ledger",
+    "Item": "Stock Item",
+    "UOM": "Unit",
+}
+
+_MASTER_DISPLAY_FIELDS = {
+    "Customer": "customer_name",
+    "Supplier": "supplier_name",
+    "Account": "account_name",
+    "Item": "item_name",
+    "UOM": "uom_name",
+}
+
+
 def _check_agent():
     if frappe.session.user == "Guest":
         frappe.throw(_("Authentication required"), frappe.PermissionError)
@@ -35,21 +52,13 @@ def pull_next_job(agent_id: str):
     fallback_payload = None
     master_probe = None
 
-    master_doctypes = {"Customer", "Supplier", "Item", "UOM", "Account"}
-    if q.source_doctype in master_doctypes and q.event in {"on_update", "on_update_after_submit"}:
+    if q.source_doctype in _MASTER_OBJECT_TYPES and q.event in {"on_update", "on_update_after_submit"}:
         if not _master_identity(q.connection, q.source_doctype, q.source_name):
             fallback_payload = build_master_create_fallback(q)
-            object_type = {
-                "Customer": "Ledger",
-                "Supplier": "Ledger",
-                "Account": "Ledger",
-                "Item": "Stock Item",
-                "UOM": "Unit",
-            }[q.source_doctype]
             connection = frappe.get_doc("Tally Connection Settings", q.connection)
             master_probe = {
                 "name": q.source_name,
-                "object_type": object_type,
+                "object_type": _MASTER_OBJECT_TYPES[q.source_doctype],
                 "company": connection.tally_company_name,
             }
 
@@ -69,13 +78,36 @@ def pull_next_job(agent_id: str):
 
 
 @frappe.whitelist(methods=["POST"])
-def ack_job(queue_name: str, success: int, tally_response: str = "", http_status: int = 0, latency_ms: float = 0, error: str | None = None):
+def ack_job(
+    queue_name: str,
+    success: int,
+    tally_response: str = "",
+    http_status: int = 0,
+    latency_ms: float = 0,
+    error: str | None = None,
+):
     _check_agent()
-    complete_job(queue_name, bool(int(success)), tally_response, int(http_status), float(latency_ms), error)
+    complete_job(
+        queue_name,
+        bool(int(success)),
+        tally_response,
+        int(http_status),
+        float(latency_ms),
+        error,
+    )
     return {"ok": True}
 
+
 @frappe.whitelist(methods=["POST"])
-def create_period_export(connection: str, from_date: str, to_date: str, include_masters: int = 1, master_scope: str = "Masters Referenced by Transactions", format: str = "XML", transaction_types: str = "Sales Invoice, Purchase Invoice, Payment Entry, Journal Entry"):
+def create_period_export(
+    connection: str,
+    from_date: str,
+    to_date: str,
+    include_masters: int = 1,
+    master_scope: str = "Masters Referenced by Transactions",
+    format: str = "XML",
+    transaction_types: str = "Sales Invoice, Purchase Invoice, Payment Entry, Journal Entry",
+):
     _check_agent()
     job = frappe.get_doc({
         "doctype": "Tally Export Job",
@@ -88,7 +120,12 @@ def create_period_export(connection: str, from_date: str, to_date: str, include_
         "format": format,
         "transaction_types": transaction_types,
     }).insert(ignore_permissions=True)
-    frappe.enqueue("tally_bridge.sync.exporter.generate_period_export", job_name=job.name, queue="long", enqueue_after_commit=True)
+    frappe.enqueue(
+        "tally_bridge.sync.exporter.generate_period_export",
+        job_name=job.name,
+        queue="long",
+        enqueue_after_commit=True,
+    )
     return {"job": job.name}
 
 
@@ -109,9 +146,11 @@ def reconcile_masters(connection: str):
 @frappe.whitelist(methods=["POST"])
 def pull_reconciliation(agent_id: str):
     _check_agent()
+
     row = frappe.db.sql(
         """
-        SELECT name, connection FROM `tabTally Reconciliation Job`
+        SELECT name, connection
+        FROM `tabTally Reconciliation Job`
         WHERE status='Queued'
         ORDER BY requested_at ASC
         LIMIT 1
@@ -120,34 +159,35 @@ def pull_reconciliation(agent_id: str):
     )
     if not row:
         return {"job": None}
+
     job = frappe.get_doc("Tally Reconciliation Job", row[0].name)
     job.status = "Processing"
     job.save(ignore_permissions=True)
     frappe.db.commit()
+
     connection = frappe.get_doc("Tally Connection Settings", job.connection)
     masters = []
-    for doctype, name_field, parent_filter in [
-        ("Customer", "customer_name", {}),
-        ("Supplier", "supplier_name", {}),
-        ("Item", "item_name", {}),
-        ("Account", "account_name", {}),
-    ]:
-        filters = dict(parent_filter)
+
+    for doctype, name_field in _MASTER_DISPLAY_FIELDS.items():
+        filters = {}
         if doctype == "Account":
             filters["is_group"] = 0
+
         rows = frappe.get_all(
             doctype,
             filters=filters,
             fields=["name", name_field],
             limit_page_length=0,
         )
-        for row in rows:
+
+        for master in rows:
             masters.append({
                 "source_doctype": doctype,
-                "source_name": row.name,
-                "display_name": row.get(name_field) or row.name,
-                "object_type": "Stock Item" if doctype == "Item" else "Ledger",
+                "source_name": master.name,
+                "display_name": master.get(name_field) or master.name,
+                "object_type": _MASTER_OBJECT_TYPES[doctype],
             })
+
     return {
         "job": {
             "name": job.name,
@@ -159,8 +199,16 @@ def pull_reconciliation(agent_id: str):
 
 
 @frappe.whitelist(methods=["POST"])
-def ack_reconciliation(job_name: str, success: int, summary_json: str = "{}", matches_json: str = "[]", unmatched_json: str = "[]", error: str = ""):
+def ack_reconciliation(
+    job_name: str,
+    success: int,
+    summary_json: str = "{}",
+    matches_json: str = "[]",
+    unmatched_json: str = "[]",
+    error: str = "",
+):
     _check_agent()
+
     job = frappe.get_doc("Tally Reconciliation Job", job_name)
     job.status = "Completed" if int(success) else "Failed"
     job.summary_json = summary_json
@@ -182,8 +230,10 @@ def ack_reconciliation(job_name: str, success: int, summary_json: str = "{}", ma
                 )
                 if existing:
                     continue
-                # Exact-name reconciliation is safe only when Tally returned
-                # exactly one candidate; the Agent enforces that condition.
+
+                # Customer and Supplier records are intentionally allowed to
+                # point to the same Tally Ledger. Tally has one ledger
+                # namespace while ERPNext separates the business roles.
                 frappe.get_doc({
                     "doctype": "Tally Master Identity",
                     "connection": job.connection,
@@ -200,6 +250,7 @@ def ack_reconciliation(job_name: str, success: int, summary_json: str = "{}", ma
                 }).insert(ignore_permissions=True)
         except Exception as exc:
             job.error = f"Reconciliation identity-link error: {exc}"
+
     job.completed_at = frappe.utils.now_datetime()
     job.save(ignore_permissions=True)
     frappe.db.commit()
