@@ -80,7 +80,14 @@ def _gst_registration_type(doc):
 
 
 def _add_party_details(ledger, doc, display_name: str):
-    """Render the party fields using the same hierarchy observed in a Tally export."""
+    """Render party mailing/statutory details using Tally's ledger XML structure.
+
+    Tally's documented ledger import examples and its current ledger-master
+    XML template use ADDRESS.LIST plus COUNTRYNAME/STATENAME/PINCODE at the
+    ledger level, and repeat the mailing details under
+    LEDMAILINGDETAILS.LIST. We intentionally emit both structures so CREATE
+    and ALTER follow the same master schema.
+    """
     address = _primary_address(doc)
     pan = getattr(doc, "pan", None)
     gstin = getattr(doc, "gstin", None) or getattr(doc, "tax_id", None)
@@ -93,15 +100,26 @@ def _add_party_details(ledger, doc, display_name: str):
         country = getattr(address, "country", None)
         pincode = getattr(address, "pincode", None)
 
+    lines = _address_lines(address)
+
+    # Core ledger mailing fields. These are the fields used by Tally's
+    # documented ledger-master XML structure.
+    if lines:
+        addr_list = SubElement(ledger, "ADDRESS.LIST", {"TYPE": "String"})
+        for line in lines:
+            _text(addr_list, "ADDRESS", line)
+
     if country:
-        _text(ledger, "COUNTRYOFRESIDENCE", country)
+        _text(ledger, "COUNTRYNAME", country)
+    if state:
+        _text(ledger, "STATENAME", state)
+    if pincode:
+        _text(ledger, "PINCODE", pincode)
+
     if pan:
         _text(ledger, "INCOMETAXNUMBER", pan)
 
     _text(ledger, "ISBILLWISEON", "Yes")
-
-    if state:
-        _text(ledger, "PRIORSTATENAME", state)
 
     gst_registration_type = _gst_registration_type(doc)
     if gst_registration_type or gstin or state:
@@ -110,24 +128,29 @@ def _add_party_details(ledger, doc, display_name: str):
         if gst_registration_type:
             _text(gst, "GSTREGISTRATIONTYPE", gst_registration_type)
         if state:
-            _text(gst, "PLACEOFSUPPLY", state)
+            _text(gst, "STATE", state)
         if gstin:
             _text(gst, "GSTIN", gstin)
 
+    # TallyPrime 3.x+ mailing-details structure. Keep this identical for
+    # CREATE and ALTER so an ALTER cannot accidentally drop address data.
     mailing = SubElement(ledger, "LEDMAILINGDETAILS.LIST")
-    lines = _address_lines(address)
     if lines:
-        addr_list = SubElement(mailing, "ADDRESS.LIST", {"TYPE": "String"})
+        mailing_addresses = SubElement(
+            mailing, "ADDRESS.LIST", {"TYPE": "String"}
+        )
         for line in lines:
-            _text(addr_list, "ADDRESS", line)
+            _text(mailing_addresses, "ADDRESS", line)
+
     _text(mailing, "APPLICABLEFROM", _effective_date(doc))
-    if pincode:
-        _text(mailing, "PINCODE", pincode)
     _text(mailing, "MAILINGNAME", display_name or "")
     if state:
         _text(mailing, "STATE", state)
     if country:
         _text(mailing, "COUNTRY", country)
+    if pincode:
+        _text(mailing, "PINCODE", pincode)
+
 
 
 def _ledger_name_list(ledger, display_name: str):
