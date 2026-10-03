@@ -9,6 +9,7 @@
     "object_type",
     "tally_name",
     "stable_remote_id",
+    "match_status",
     "last_source_hash",
     "last_synced_at",
     "status"
@@ -55,6 +56,14 @@
       "fieldname": "stable_remote_id",
       "fieldtype": "Data",
       "label": "Stable Remote ID"
+    },
+    {
+      "fieldname": "match_status",
+      "fieldtype": "Select",
+      "options": "Matched\nShared Mapping\nCreate Required\nNeeds Review",
+      "label": "Reconciliation Status",
+      "default": "Matched",
+      "in_list_view": 1
     },
     {
       "fieldname": "last_source_hash",
