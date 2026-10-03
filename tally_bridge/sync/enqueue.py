@@ -128,12 +128,20 @@ def on_document_event(doc, method=None):
                 if not frappe.db.exists(dependency_doctype, dependency_name):
                     continue
                 dependency = frappe.get_doc(dependency_doctype, dependency_name)
-                _enqueue_snapshot(
-                    connection,
-                    dependency,
-                    "on_update",
-                    20,
+                identity_exists = frappe.db.exists(
+                    "Tally Master Identity",
+                    {
+                        "connection": connection.name,
+                        "source_doctype": dependency_doctype,
+                        "source_name": dependency_name,
+                        "status": "Synced",
+                    },
                 )
+                # A transaction must never depend on a legacy Doc-ID probe.
+                # If the master has no identity yet, enqueue a CREATE using
+                # its real ERPNext display name.
+                if not identity_exists:
+                    _enqueue_snapshot(connection, dependency, "after_insert", 20)
 
         _enqueue_snapshot(
             connection,
