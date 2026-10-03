@@ -125,8 +125,8 @@ def queue_export_job(job_name: str):
     frappe.db.commit()
     frappe.enqueue(
         "tally_bridge.sync.exporter.generate_period_export",
-        job_name=job.name,
         queue="long",
+        kwargs={"job_name": job.name},
         enqueue_after_commit=True,
     )
     return {"job": job.name, "status": "Queued"}
@@ -155,8 +155,8 @@ def create_period_export(
     }).insert(ignore_permissions=True)
     frappe.enqueue(
         "tally_bridge.sync.exporter.generate_period_export",
-        job_name=job.name,
         queue="long",
+        kwargs={"job_name": job.name},
         enqueue_after_commit=True,
     )
     return {"job": job.name}
