@@ -126,7 +126,7 @@ def queue_export_job(job_name: str):
     frappe.enqueue(
         "tally_bridge.sync.exporter.generate_period_export",
         queue="long",
-        kwargs={"job_name": job.name},
+        export_job_name=job.name,
         enqueue_after_commit=True,
     )
     return {"job": job.name, "status": "Queued"}
