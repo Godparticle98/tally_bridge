@@ -36,3 +36,33 @@ class FrappeClient:
         )
         r.raise_for_status()
         return r.json()
+
+
+    def pull_reconciliation(self, agent_id):
+        r = requests.post(
+            f"{self.base_url}/api/method/tally_bridge.api.pull_reconciliation",
+            headers=self._headers(),
+            json={"agent_id": agent_id},
+            timeout=self.timeout,
+        )
+        if not r.ok:
+            raise RuntimeError(f"Frappe API {r.status_code}: {r.text[:5000]}")
+        return r.json().get("message", {}).get("job")
+
+    def ack_reconciliation(self, job_name, success, summary_json, matches_json, unmatched_json, error=""):
+        r = requests.post(
+            f"{self.base_url}/api/method/tally_bridge.api.ack_reconciliation",
+            headers=self._headers(),
+            json={
+                "job_name": job_name,
+                "success": int(success),
+                "summary_json": summary_json,
+                "matches_json": matches_json,
+                "unmatched_json": unmatched_json,
+                "error": error,
+            },
+            timeout=self.timeout,
+        )
+        if not r.ok:
+            raise RuntimeError(f"Frappe API {r.status_code}: {r.text[:5000]}")
+        return r.json().get("message", {})
