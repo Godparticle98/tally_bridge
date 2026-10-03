@@ -3,6 +3,8 @@ from __future__ import annotations
 import frappe
 from frappe import _
 
+from .sync.utils import stable_remote_id
+
 from .sync.service import (
     build_master_create_fallback,
     build_tally_payload,
@@ -165,6 +167,39 @@ def ack_reconciliation(job_name: str, success: int, summary_json: str = "{}", ma
     job.matches_json = matches_json
     job.unmatched_json = unmatched_json
     job.error = error or None
+
+    if int(success):
+        try:
+            matches = frappe.parse_json(matches_json or "[]")
+            for match in matches:
+                existing = frappe.db.exists(
+                    "Tally Master Identity",
+                    {
+                        "connection": job.connection,
+                        "source_doctype": match["source_doctype"],
+                        "source_name": match["source_name"],
+                    },
+                )
+                if existing:
+                    continue
+                # Exact-name reconciliation is safe only when Tally returned
+                # exactly one candidate; the Agent enforces that condition.
+                frappe.get_doc({
+                    "doctype": "Tally Master Identity",
+                    "connection": job.connection,
+                    "source_doctype": match["source_doctype"],
+                    "source_name": match["source_name"],
+                    "object_type": match["object_type"],
+                    "tally_name": match["tally_name"],
+                    "stable_remote_id": stable_remote_id(
+                        frappe.local.site,
+                        match["source_doctype"],
+                        match["source_name"],
+                    ),
+                    "status": "Synced",
+                }).insert(ignore_permissions=True)
+        except Exception as exc:
+            job.error = f"Reconciliation identity-link error: {exc}"
     job.completed_at = frappe.utils.now_datetime()
     job.save(ignore_permissions=True)
     frappe.db.commit()
