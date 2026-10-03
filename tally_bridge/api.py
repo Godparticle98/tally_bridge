@@ -44,9 +44,11 @@ def pull_next_job(agent_id: str):
                 "Item": "Stock Item",
                 "UOM": "Unit",
             }[q.source_doctype]
+            connection = frappe.get_doc("Tally Connection Settings", q.connection)
             master_probe = {
                 "name": q.source_name,
                 "object_type": object_type,
+                "company": connection.tally_company_name,
             }
 
     return {
