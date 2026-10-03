@@ -72,7 +72,7 @@ def _parse_collection(xml, element_names):
 def _match_collection(erp_masters, tally_objects):
     matches, unmatched, ambiguous = [], [], []
     for master in erp_masters:
-        candidates = tally_objects.get(_norm(master["display_name"]), [])
+        candidates = tally_objects.get(_norm(master.get("reconciliation_name") or master["display_name"]), [])
         if len(candidates) == 1:
             matches.append({
                 **master,
