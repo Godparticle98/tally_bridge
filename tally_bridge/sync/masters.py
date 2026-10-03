@@ -368,6 +368,152 @@ def _identity_tally_name(connection_name, source_doctype, source_name):
     )
 
 
+
+def _item_hsn_code(doc):
+    """Resolve the ERPNext HSN/SAC value without inventing a tax code."""
+    for field in ("gst_hsn_code", "hsn_code", "custom_hsn_code", "gst_hsn"):
+        value = getattr(doc, field, None)
+        if value:
+            return str(value).strip()
+    return None
+
+
+def _item_hsn_description(doc, hsn_code):
+    for field in ("gst_hsn_description", "hsn_description", "custom_hsn_description"):
+        value = getattr(doc, field, None)
+        if value:
+            return str(value).strip()
+
+    if not hsn_code:
+        return None
+
+    try:
+        if frappe.db.exists("DocType", "GST HSN Code"):
+            return (
+                frappe.db.get_value("GST HSN Code", hsn_code, "description")
+                or frappe.db.get_value("GST HSN Code", hsn_code, "hsn_description")
+            )
+    except Exception:
+        pass
+    return None
+
+
+def _classify_tax_head(value):
+    text = str(value or "").strip().casefold()
+    if "igst" in text:
+        return "IGST"
+    if "cgst" in text:
+        return "CGST"
+    if "sgst" in text or "utgst" in text:
+        return "SGST/UTGST"
+    if "cess" in text:
+        return "Cess"
+    return None
+
+
+def _item_gst_rates(doc):
+    """Resolve GST component rates from the ERPNext Item Tax Template.
+
+    We deliberately do not infer a GST slab from the HSN code. The ERPNext
+    item tax configuration is the source of truth for the rate.
+    """
+    rates = {}
+
+    direct_fields = {
+        "IGST": ("igst_rate", "gst_igst_rate"),
+        "CGST": ("cgst_rate", "gst_cgst_rate"),
+        "SGST/UTGST": ("sgst_rate", "gst_sgst_rate", "utgst_rate"),
+        "Cess": ("cess_rate", "gst_cess_rate"),
+    }
+    for head, fields in direct_fields.items():
+        for field in fields:
+            value = getattr(doc, field, None)
+            if value not in (None, ""):
+                try:
+                    rates[head] = float(value)
+                    break
+                except (TypeError, ValueError):
+                    pass
+
+    for assignment in doc.get("taxes") or []:
+        template_name = getattr(assignment, "item_tax_template", None)
+        if not template_name:
+            continue
+        try:
+            template = frappe.get_cached_doc("Item Tax Template", template_name)
+        except Exception:
+            continue
+
+        for row in template.get("taxes") or []:
+            account = (
+                getattr(row, "tax_type", None)
+                or getattr(row, "tax", None)
+                or getattr(row, "account_head", None)
+            )
+            head = _classify_tax_head(account)
+            if not head:
+                continue
+            rate = getattr(row, "tax_rate", None)
+            if rate in (None, ""):
+                continue
+            try:
+                rates[head] = float(rate)
+            except (TypeError, ValueError):
+                continue
+
+    if "IGST" not in rates and rates.get("CGST") is not None and rates.get("SGST/UTGST") is not None:
+        if abs(rates["CGST"] - rates["SGST/UTGST"]) < 1e-9:
+            rates["IGST"] = rates["CGST"] + rates["SGST/UTGST"]
+
+    return rates
+
+
+def _add_item_gst_details(stock_item, doc):
+    """Render Tally Stock Item GST + HSN master details."""
+    hsn_code = _item_hsn_code(doc)
+    hsn_description = _item_hsn_description(doc, hsn_code)
+    rates = _item_gst_rates(doc)
+
+    if not hsn_code and not rates:
+        return
+
+    _text(stock_item, "GSTAPPLICABLE", "Applicable")
+    _text(stock_item, "GSTTYPEOFSUPPLY", "Goods")
+
+    gst = SubElement(stock_item, "GSTDETAILS.LIST")
+    _text(gst, "APPLICABLEFROM", _effective_date(doc))
+    _text(gst, "TAXABILITY", "Taxable")
+    _text(gst, "SRCOFGSTDETAILS", "Specify Details Here")
+    _text(gst, "GSTCALCSLABONMRP", "No")
+    _text(gst, "ISREVERSECHARGEAPPLICABLE", "No")
+    _text(gst, "ISNONGSTGOODS", "No")
+    _text(gst, "GSTINELIGIBLEITC", "No")
+    _text(gst, "INCLUDEEXPFORSLABCALC", "No")
+    _text(gst, "ISTAXONMRP", "No")
+
+    statewise = SubElement(gst, "STATEWISEDETAILS.LIST")
+    _text(statewise, "STATENAME", "Any")
+
+    for head in ("CGST", "SGST/UTGST", "IGST", "Cess"):
+        if head not in rates:
+            continue
+        detail = SubElement(statewise, "RATEDETAILS.LIST")
+        _text(detail, "GSTRATEDUTYHEAD", head)
+        _text(detail, "GSTRATEVALUATIONTYPE", "Based on Value")
+        _text(detail, "GSTRATE", rates[head])
+
+    _text(gst, "GSTSLABRATES.LIST", "")
+    _text(gst, "TEMPGSTITEMSLABRATES.LIST", "")
+    _text(gst, "TEMPGSTDETAILSLABRATES.LIST", "")
+
+    if hsn_code:
+        hsn = SubElement(stock_item, "HSNDETAILS.LIST")
+        _text(hsn, "APPLICABLEFROM", _effective_date(doc))
+        _text(hsn, "HSNCODE", hsn_code)
+        if hsn_description:
+            _text(hsn, "HSN", hsn_description)
+        _text(hsn, "SRCOFHSNDETAILS", "Specify Details Here")
+
 def item(doc, company: str, action="Create", tally_name: str | None = None) -> str:
     display_name = getattr(doc, "item_name", None) or doc.name
     target_name = tally_name or display_name
@@ -392,6 +538,10 @@ def item(doc, company: str, action="Create", tally_name: str | None = None) -> s
         if not tally_uom:
             tally_uom = _uom_symbol(stock_uom)
         _text(stock_item, "BASEUNITS", tally_uom)
+
+    # Item GST/HSN is part of the Tally Stock Item master itself. Without
+    # these lists, Tally creates the item but leaves statutory details blank.
+    _add_item_gst_details(stock_item, doc)
 
     return _envelope([m], company, remote)
 
