@@ -226,7 +226,7 @@ def ack_reconciliation(
         try:
             matches = frappe.parse_json(matches_json or "[]")
             for match in matches:
-                existing = frappe.db.exists(
+                identity_name = frappe.db.exists(
                     "Tally Master Identity",
                     {
                         "connection": job.connection,
@@ -234,14 +234,8 @@ def ack_reconciliation(
                         "source_name": match["source_name"],
                     },
                 )
-                if existing:
-                    continue
 
-                # Customer and Supplier records are intentionally allowed to
-                # point to the same Tally Ledger. Tally has one ledger
-                # namespace while ERPNext separates the business roles.
-                frappe.get_doc({
-                    "doctype": "Tally Master Identity",
+                values = {
                     "connection": job.connection,
                     "source_doctype": match["source_doctype"],
                     "source_name": match["source_name"],
@@ -253,7 +247,21 @@ def ack_reconciliation(
                         match["source_name"],
                     ),
                     "status": "Synced",
-                }).insert(ignore_permissions=True)
+                    "match_status": match.get("reconciliation_status") or "Matched",
+                    "last_synced_at": frappe.utils.now_datetime(),
+                }
+
+                if identity_name:
+                    identity = frappe.get_doc("Tally Master Identity", identity_name)
+                    for field, value in values.items():
+                        if field != "connection":
+                            setattr(identity, field, value)
+                    identity.save(ignore_permissions=True)
+                else:
+                    frappe.get_doc({
+                        "doctype": "Tally Master Identity",
+                        **values,
+                    }).insert(ignore_permissions=True)
         except Exception as exc:
             job.error = f"Reconciliation identity-link error: {exc}"
 
