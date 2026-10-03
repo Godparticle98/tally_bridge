@@ -75,7 +75,11 @@ class TallyClient:
 
 
     def export_ledgers(self, company=None):
-        """Export Tally ledger masters as XML for reconciliation."""
+        """Export the complete Ledger collection from TallyPrime.
+
+        Tally's collection export requires the collection to be defined in the
+        request when we want deterministic, complete master extraction.
+        """
         company_tag = f"<SVCURRENTCOMPANY>{company}</SVCURRENTCOMPANY>" if company else ""
         payload = f"""<?xml version="1.0" encoding="UTF-8"?>
 <ENVELOPE>
@@ -83,14 +87,30 @@ class TallyClient:
     <VERSION>1</VERSION>
     <TALLYREQUEST>EXPORT</TALLYREQUEST>
     <TYPE>COLLECTION</TYPE>
-    <ID>Ledger</ID>
+    <ID>TallyBridgeLedgerCollection</ID>
   </HEADER>
   <BODY>
     <DESC>
       <STATICVARIABLES>
-        <SVEXPORTFORMAT>$SysName:XML</SVEXPORTFORMAT>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         {company_tag}
       </STATICVARIABLES>
+      <TDL>
+        <TDLMESSAGE>
+          <COLLECTION NAME="TallyBridgeLedgerCollection" ISMODIFY="No" ISINITIALIZE="Yes">
+            <TYPE>Ledger</TYPE>
+            <NATIVEMETHOD>Name</NATIVEMETHOD>
+            <NATIVEMETHOD>Parent</NATIVEMETHOD>
+            <NATIVEMETHOD>IncomeTaxNumber</NATIVEMETHOD>
+            <NATIVEMETHOD>LedgerPhone</NATIVEMETHOD>
+            <NATIVEMETHOD>LedgerMobile</NATIVEMETHOD>
+            <NATIVEMETHOD>LedgerContact</NATIVEMETHOD>
+            <NATIVEMETHOD>StateName</NATIVEMETHOD>
+            <NATIVEMETHOD>PINCode</NATIVEMETHOD>
+            <NATIVEMETHOD>MailingName</NATIVEMETHOD>
+          </COLLECTION>
+        </TDLMESSAGE>
+      </TDL>
     </DESC>
   </BODY>
 </ENVELOPE>"""
