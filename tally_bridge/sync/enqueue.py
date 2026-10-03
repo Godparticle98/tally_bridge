@@ -143,3 +143,22 @@ def on_document_event(doc, method=None):
         )
 
     return None
+
+
+def on_address_update(doc, method=None):
+    """Queue the linked Customer/Supplier when its primary address changes."""
+    links = frappe.get_all(
+        "Dynamic Link",
+        filters={"parent": doc.name, "parenttype": "Address", "link_doctype": ["in", ["Customer", "Supplier"]]},
+        fields=["link_doctype", "link_name"],
+        limit_page_length=100,
+    )
+    for link in links:
+        try:
+            party = frappe.get_doc(link.link_doctype, link.link_name)
+        except Exception:
+            continue
+        for connection in _enabled_companies():
+            if getattr(party, "company", None) and party.company != connection.erpnext_company:
+                continue
+            _enqueue_snapshot(connection, party, "on_update", 10)
