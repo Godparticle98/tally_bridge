@@ -12,6 +12,7 @@ from .sync.service import (
     complete_job,
     _master_identity,
 )
+from .sync.enqueue import _enqueue_snapshot
 
 
 _ALLOWED_ROLES = {"Tally Bridge Agent", "System Manager"}
@@ -269,3 +270,95 @@ def ack_reconciliation(
     job.save(ignore_permissions=True)
     frappe.db.commit()
     return {"ok": True}
+
+
+@frappe.whitelist(methods=["POST"])
+def provision_reconciled_masters(
+    connection: str,
+    source_doctypes: str = "UOM,Account,Customer,Supplier,Item",
+    limit: int = 100,
+    reconciliation_job: str | None = None,
+):
+    """Queue only reconciliation records explicitly classified as Create Required.
+
+    Provisioning is intentionally separate from reconciliation so a large ERPNext
+    dataset is never pushed into Tally accidentally. UOMs/accounts/parties are
+    queued before Items; Item jobs depend on any newly queued UOM jobs.
+    """
+    _check_agent()
+
+    limit = max(1, min(int(limit), 1000))
+    allowed = {value.strip() for value in (source_doctypes or "").split(",") if value.strip()}
+    invalid = allowed.difference(_MASTER_DISPLAY_FIELDS)
+    if invalid:
+        frappe.throw(_("Unsupported master doctypes: {0}").format(", ".join(sorted(invalid))))
+
+    filters = {"connection": connection, "status": "Completed"}
+    if reconciliation_job:
+        filters["name"] = reconciliation_job
+
+    job_rows = frappe.get_all(
+        "Tally Reconciliation Job",
+        filters=filters,
+        fields=["name", "unmatched_json", "completed_at"],
+        order_by="completed_at desc",
+        limit_page_length=1,
+    )
+    if not job_rows:
+        frappe.throw(_("No completed reconciliation job is available for this connection."))
+
+    unmatched = frappe.parse_json(job_rows[0].unmatched_json or "[]")
+    candidates = [
+        row for row in unmatched
+        if row.get("match_status") == "Create Required"
+        and row.get("source_doctype") in allowed
+    ][:limit]
+
+    priority = {"UOM": 10, "Account": 20, "Customer": 20, "Supplier": 20, "Item": 30}
+
+    created = []
+    skipped = []
+    connection_doc = frappe.get_doc("Tally Connection Settings", connection)
+    for row in sorted(candidates, key=lambda x: (priority.get(x["source_doctype"], 50), x["source_name"])):
+        doctype = row["source_doctype"]
+        name = row["source_name"]
+
+        if _master_identity(connection, doctype, name):
+            skipped.append({"source_doctype": doctype, "source_name": name, "reason": "Identity already exists"})
+            continue
+
+        try:
+            doc = frappe.get_doc(doctype, name)
+        except Exception:
+            skipped.append({"source_doctype": doctype, "source_name": name, "reason": "ERPNext document no longer exists"})
+            continue
+
+        queue_name = _enqueue_snapshot(connection_doc, doc, "after_insert", priority.get(doctype, 50))
+        if queue_name:
+            created.append({"queue": queue_name, "source_doctype": doctype, "source_name": name})
+        else:
+            skipped.append({"source_doctype": doctype, "source_name": name, "reason": "No active master mapping"})
+
+    uom_jobs = {item["source_name"]: item["queue"] for item in created if item["source_doctype"] == "UOM"}
+    if uom_jobs:
+        for item in created:
+            if item["source_doctype"] != "Item":
+                continue
+            doc = frappe.get_doc("Item", item["source_name"])
+            uom_names = {getattr(doc, "stock_uom", None), getattr(doc, "default_unit_of_measure", None)}
+            deps = [uom_jobs[name] for name in uom_names if name in uom_jobs]
+            if deps:
+                q = frappe.get_doc("Tally Sync Queue", item["queue"])
+                current = frappe.parse_json(q.depends_on or "[]")
+                q.depends_on = frappe.as_json(sorted(set(current + deps)))
+                q.save(ignore_permissions=True)
+
+    frappe.db.commit()
+    return {
+        "reconciliation_job": job_rows[0].name,
+        "requested": len(candidates),
+        "queued": len(created),
+        "skipped": len(skipped),
+        "queued_items": created,
+        "skipped_items": skipped,
+    }
