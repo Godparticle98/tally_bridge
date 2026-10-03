@@ -8,7 +8,7 @@ frappe.ui.form.on("Tally Export Job", {
             frm.add_custom_button(__("Run Export"), () => {
                 const run = () => {
                     frappe.call({
-                        method: "tally_bridge.tally_bridge.doctype.tally_export_job.tally_export_job.queue_export",
+                        method: "tally_bridge.api.queue_export_job",
                         args: { job_name: frm.doc.name },
                         freeze: true,
                         freeze_message: __("Queueing Tally export...")
