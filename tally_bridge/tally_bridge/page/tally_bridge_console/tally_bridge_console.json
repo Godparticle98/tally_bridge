@@ -1,0 +1,7 @@
+{
+  "doctype": "Page",
+  "name": "tally-bridge-console",
+  "module": "tally_bridge",
+  "title": "Tally Bridge Console",
+  "standard": true
+}
