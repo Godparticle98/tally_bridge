@@ -8,7 +8,7 @@ from frappe.utils import now_datetime
 
 from .renderer import render_document
 from .masters import render_master, tally_uom_name
-from .utils import canonical_json, stable_remote_id
+from .utils import canonical_json, sha256_text, stable_remote_id
 
 
 DEFAULT_MAPPINGS = [
@@ -208,6 +208,43 @@ def _master_object_type(source_doctype: str) -> str:
         "UOM": "Unit",
         "Account": "Ledger",
     }.get(source_doctype, "Ledger")
+
+
+def _load_queue_snapshot(queue_doc):
+    """Load a queued ERPNext snapshot and repair legacy/corrupt payloads when possible."""
+    payload = queue_doc.payload_json
+
+    if payload:
+        try:
+            return json.loads(payload)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            pass
+
+    # Queue records are durable synchronization intents. If an old or corrupt
+    # row has no usable snapshot, rebuild it from the current source document
+    # instead of crashing the agent's polling loop.
+    try:
+        source_doc = frappe.get_doc(queue_doc.source_doctype, queue_doc.source_name)
+    except Exception as exc:
+        frappe.throw(
+            f"Queue {queue_doc.name} has invalid payload_json and source "
+            f"{queue_doc.source_doctype}/{queue_doc.source_name} cannot be loaded: {exc}"
+        )
+
+    snapshot = source_doc.as_dict(no_nulls=False)
+    repaired_payload = canonical_json(snapshot)
+    queue_doc.payload_json = repaired_payload
+    queue_doc.payload_hash = sha256_text(repaired_payload)
+    queue_doc.save(ignore_permissions=True)
+    frappe.db.commit()
+
+    frappe.logger("tally_bridge").warning(
+        "Repaired invalid Tally Sync Queue payload: %s (%s/%s)",
+        queue_doc.name,
+        queue_doc.source_doctype,
+        queue_doc.source_name,
+    )
+    return snapshot
 
 
 def build_tally_payload(queue_doc):
