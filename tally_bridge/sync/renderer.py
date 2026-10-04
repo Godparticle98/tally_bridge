@@ -80,10 +80,12 @@ def _ledger_entry(parent, ledger_name, amount, deemed_positive, party=False, bil
         _text(e, "ISLASTDEEMEDPOSITIVE", "Yes" if deemed_positive else "No")
     _text(e, "AMOUNT", _amount(amount))
     if bill:
-        b = SubElement(e, "BILLALLOCATIONS.LIST")
-        _text(b, "NAME", bill)
-        _text(b, "BILLTYPE", "New Ref")
-        _text(b, "AMOUNT", _amount(amount))
+        allocations = bill if isinstance(bill, list) else [{"name": bill, "amount": abs(float(amount)), "bill_type": "New Ref"}]
+        for allocation in allocations:
+            b = SubElement(e, "BILLALLOCATIONS.LIST")
+            _text(b, "NAME", allocation["name"])
+            _text(b, "BILLTYPE", allocation.get("bill_type", "New Ref"))
+            _text(b, "AMOUNT", _amount(allocation.get("amount", abs(float(amount)))))
     return e
 
 
@@ -149,8 +151,13 @@ def purchase_invoice(doc, company: str, action: str = "Create", connection: str 
         {"REMOTEID": remote_id, "VCHTYPE": "Purchase", "ACTION": action, "OBJVIEW": "Invoice Voucher View"},
     )
     _text(v, "DATE", str(doc.posting_date).replace("-", ""))
+    _text(v, "EFFECTIVEDATE", str(doc.posting_date).replace("-", ""))
     _text(v, "VOUCHERTYPENAME", "Purchase")
     _text(v, "VOUCHERNUMBER", doc.name)
+    if getattr(doc, "bill_no", None):
+        _text(v, "REFERENCE", doc.bill_no)
+    if getattr(doc, "bill_date", None):
+        _text(v, "REFERENCEDATE", str(doc.bill_date).replace("-", ""))
     _text(v, "PERSISTEDVIEW", "Invoice Voucher View")
     _text(v, "ISINVOICE", "Yes")
     _text(v, "PARTYLEDGERNAME", _master_name(connection, "Supplier", doc.supplier))
@@ -158,6 +165,9 @@ def purchase_invoice(doc, company: str, action: str = "Create", connection: str 
 
     # Supplier is Cr in a standard purchase invoice.
     _ledger_entry(v, doc.supplier, float(doc.grand_total), False, party=True, bill=doc.name, connection=connection, ledger_doctype="Supplier")
+
+    purchase_ledger = getattr(frappe.get_doc("Tally Connection Settings", connection), "default_purchase_ledger", None) if connection else None
+    purchase_ledger = (purchase_ledger or "Purchase").strip()
 
     for item in doc.items:
         inv = SubElement(v, "ALLINVENTORYENTRIES.LIST")
@@ -172,7 +182,7 @@ def purchase_invoice(doc, company: str, action: str = "Create", connection: str 
         _text(inv, "RATE", f"{rate:g}/{tally_uom or 'NOS'}")
         _text(inv, "AMOUNT", _amount(-amount))
         alloc = SubElement(inv, "ACCOUNTINGALLOCATIONS.LIST")
-        _text(alloc, "LEDGERNAME", _master_name(connection, "Account", item.expense_account))
+        _text(alloc, "LEDGERNAME", purchase_ledger)
         _text(alloc, "ISDEEMEDPOSITIVE", "Yes")
         _text(alloc, "AMOUNT", _amount(amount))
 
@@ -187,28 +197,80 @@ def purchase_invoice(doc, company: str, action: str = "Create", connection: str 
     return envelope([voucher], company=company, request_id=remote_id)
 
 
+def _payment_bill_allocations(doc):
+    allocations = []
+    for ref in getattr(doc, "references", []) or []:
+        if not getattr(ref, "reference_name", None) or not float(getattr(ref, "allocated_amount", 0) or 0):
+            continue
+        allocations.append(
+            {
+                "name": ref.reference_name,
+                "amount": abs(float(ref.allocated_amount)),
+                "bill_type": "Agst Ref",
+            }
+        )
+    return allocations
+
+
 def payment_entry(doc, company: str, action: str = "Create", connection: str | None = None) -> str:
     remote_id = stable_remote_id(frappe.local.site, doc.doctype, doc.name)
     voucher_type = {"Receive": "Receipt", "Pay": "Payment", "Internal Transfer": "Contra"}.get(doc.payment_type, "Journal")
     voucher = Element("TALLYMESSAGE")
     v = SubElement(voucher, "VOUCHER", {"REMOTEID": remote_id, "VCHTYPE": voucher_type, "ACTION": action, "OBJVIEW": "Accounting Voucher View"})
     _text(v, "DATE", str(doc.posting_date).replace("-", ""))
+    _text(v, "EFFECTIVEDATE", str(doc.posting_date).replace("-", ""))
     _text(v, "VOUCHERTYPENAME", voucher_type)
     _text(v, "VOUCHERNUMBER", doc.name)
+    if getattr(doc, "reference_no", None):
+        _text(v, "REFERENCE", doc.reference_no)
+    if getattr(doc, "reference_date", None):
+        _text(v, "REFERENCEDATE", str(doc.reference_date).replace("-", ""))
     _text(v, "PERSISTEDVIEW", "Accounting Voucher View")
     _text(v, "ISINVOICE", "No")
     _text(v, "NARRATION", doc.remarks or f"ERPNext {doc.name}")
 
     amount = float(doc.paid_amount or doc.received_amount or 0)
+    party_type = getattr(doc, "party_type", None)
+    party = getattr(doc, "party", None)
+    party_doctype = party_type if party_type in {"Customer", "Supplier", "Employee"} else "Account"
+    bill = _payment_bill_allocations(doc)
+
     if doc.payment_type == "Receive":
-        _ledger_entry(v, doc.paid_to, -amount, True, party=False, connection=connection)
-        _ledger_entry(v, doc.paid_from, amount, False, party=True, bill=getattr(doc, "reference_no", None) or None, connection=connection)
+        # Receipt: Dr bank/cash, Cr customer.
+        _ledger_entry(v, doc.paid_to, amount, True, party=False, connection=connection)
+        if party:
+            _ledger_entry(
+                v,
+                party,
+                -amount,
+                False,
+                party=True,
+                bill=bill,
+                connection=connection,
+                ledger_doctype=party_doctype,
+            )
+        else:
+            _ledger_entry(v, doc.paid_from, -amount, False, party=False, connection=connection)
     elif doc.payment_type == "Pay":
-        _ledger_entry(v, doc.paid_from, amount, True, party=False, connection=connection)
-        _ledger_entry(v, doc.paid_to, -amount, False, party=True, bill=getattr(doc, "reference_no", None) or None, connection=connection)
+        # Payment: Dr supplier, Cr bank/cash.
+        if party:
+            _ledger_entry(
+                v,
+                party,
+                amount,
+                True,
+                party=True,
+                bill=bill,
+                connection=connection,
+                ledger_doctype=party_doctype,
+            )
+        else:
+            _ledger_entry(v, doc.paid_to, amount, True, party=False, connection=connection)
+        _ledger_entry(v, doc.paid_from, -amount, False, party=False, connection=connection)
     else:
-        _ledger_entry(v, doc.paid_to, -amount, True, party=False, connection=connection)
-        _ledger_entry(v, doc.paid_from, amount, False, party=False, connection=connection)
+        # Contra: Dr destination, Cr source.
+        _ledger_entry(v, doc.paid_to, amount, True, party=False, connection=connection)
+        _ledger_entry(v, doc.paid_from, -amount, False, party=False, connection=connection)
 
     return envelope([voucher], company=company, request_id=remote_id)
 
@@ -226,10 +288,19 @@ def journal_entry(doc, company: str, action: str = "Create", connection: str | N
     for row in doc.accounts:
         debit = float(row.debit or 0)
         credit = float(row.credit or 0)
+        party_type = getattr(row, "party_type", None)
+        party = getattr(row, "party", None)
+        ledger_doctype = party_type if party_type in {"Customer", "Supplier", "Employee"} else "Account"
+        ledger_name = party if party else row.account
+        bill = None
+        reference_name = getattr(row, "reference_name", None)
+        reference_type = getattr(row, "reference_type", None)
+        if reference_name and reference_type:
+            bill = [{"name": reference_name, "amount": abs(debit or credit), "bill_type": "Agst Ref"}]
         if debit:
-            _ledger_entry(v, row.account, debit, True, party=False, connection=connection)
+            _ledger_entry(v, ledger_name, debit, True, party=bool(party), bill=bill, connection=connection, ledger_doctype=ledger_doctype)
         elif credit:
-            _ledger_entry(v, row.account, -credit, False, party=False, connection=connection)
+            _ledger_entry(v, ledger_name, -credit, False, party=bool(party), bill=bill, connection=connection, ledger_doctype=ledger_doctype)
     return envelope([voucher], company=company, request_id=remote_id)
 
 
