@@ -11,6 +11,7 @@
     "erpnext_company",
     "tally_company_name",
     "tally_url",
+    "default_purchase_ledger",
     "format",
     "poll_interval_seconds",
     "notes"
@@ -43,6 +44,13 @@
       "fieldtype": "Data",
       "label": "Tally URL",
       "default": "http://127.0.0.1:9000"
+    },
+    {
+      "fieldname": "default_purchase_ledger",
+      "fieldtype": "Data",
+      "label": "Default Tally Purchase Ledger",
+      "default": "Purchase",
+      "description": "Exact Tally ledger used for stock-item purchase invoice accounting allocation. It should belong to Purchase Accounts."
     },
     {
       "fieldname": "format",
