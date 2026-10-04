@@ -170,12 +170,30 @@ def purchase_invoice(doc, company: str, action: str = "Create", connection: str 
     purchase_ledger = (purchase_ledger or "Purchase").strip()
 
     for item in doc.items:
+        amount = float(item.amount or 0)
+        is_stock_item = bool(getattr(item, "is_stock_item", False))
+
+        if not is_stock_item:
+            # Services, expenses, and fixed-asset purchases are accounting
+            # lines, not inventory movements. Do not create a fake stock item
+            # such as "General Purchase Components" in Tally.
+            expense_account = getattr(item, "expense_account", None)
+            if expense_account and amount:
+                _ledger_entry(
+                    v,
+                    expense_account,
+                    -amount,
+                    True,
+                    party=False,
+                    connection=connection,
+                )
+            continue
+
         inv = SubElement(v, "ALLINVENTORYENTRIES.LIST")
         _text(inv, "STOCKITEMNAME", _master_name(connection, "Item", item.item_code))
         _text(inv, "ISDEEMEDPOSITIVE", "Yes")
         qty = float(item.qty or 0)
         rate = float(item.rate or 0)
-        amount = float(item.amount or 0)
         tally_uom = _uom_name(connection, item.stock_uom or item.uom)
         _text(inv, "ACTUALQTY", f"{qty:g} {tally_uom or ''}".strip())
         _text(inv, "BILLEDQTY", f"{qty:g} {tally_uom or ''}".strip())
