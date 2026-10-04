@@ -80,7 +80,7 @@ def _ledger_entry(parent, ledger_name, amount, deemed_positive, party=False, bil
         _text(e, "ISLASTDEEMEDPOSITIVE", "Yes" if deemed_positive else "No")
     _text(e, "AMOUNT", _amount(amount))
     if bill:
-        allocations = bill if isinstance(bill, list) else [{"name": bill, "amount": abs(float(amount)), "bill_type": "New Ref"}]
+        allocations = bill if isinstance(bill, list) else [{"name": bill, "amount": float(amount), "bill_type": "New Ref"}]
         for allocation in allocations:
             b = SubElement(e, "BILLALLOCATIONS.LIST")
             _text(b, "NAME", allocation["name"])
@@ -205,7 +205,7 @@ def _payment_bill_allocations(doc):
         allocations.append(
             {
                 "name": ref.reference_name,
-                "amount": abs(float(ref.allocated_amount)),
+                "amount": float(ref.allocated_amount),
                 "bill_type": "Agst Ref",
             }
         )
@@ -296,7 +296,8 @@ def journal_entry(doc, company: str, action: str = "Create", connection: str | N
         reference_name = getattr(row, "reference_name", None)
         reference_type = getattr(row, "reference_type", None)
         if reference_name and reference_type:
-            bill = [{"name": reference_name, "amount": abs(debit or credit), "bill_type": "Agst Ref"}]
+            bill_amount = debit if debit else -credit
+            bill = [{"name": reference_name, "amount": bill_amount, "bill_type": "Agst Ref"}]
         if debit:
             _ledger_entry(v, ledger_name, debit, True, party=bool(party), bill=bill, connection=connection, ledger_doctype=ledger_doctype)
         elif credit:
